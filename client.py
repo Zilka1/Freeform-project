@@ -3,6 +3,8 @@ import tkinter as tk
 import sqlite3
 import os
 
+print("hello")
+
 class Canvas_GUI:
     def __init__(self, file_name, exists = False):
         self.dir = r'C:\Users\hp\Desktop\Freeform project\projects (db)\\'
