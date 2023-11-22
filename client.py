@@ -2,6 +2,8 @@ from drawing import Drawing
 import tkinter as tk
 import sqlite3
 import os
+import socket
+import threading
 
 class Canvas_GUI:
     def __init__(self, file_name, exists = False):
@@ -41,6 +43,7 @@ class Canvas_GUI:
         tk.Button(self.colors_frame, text="BLUE",font=font, command = lambda: self.set_color("BLUE")).grid(row = 0, column = 1)
         tk.Button(self.colors_frame, text="RED",font=font, command = lambda: self.set_color("RED")).grid(row = 0, column = 2)
         tk.Button(self.colors_frame, text="ORANGE",font=font, command = lambda: self.set_color("ORANGE")).grid(row = 0, column = 3)
+        tk.Button(self.colors_frame, text="Send Data",font=font, command = self.send_data).grid(row = 0, column = 8)
 
 
         vcmd = (self.root.register(self.width_entry_validation), "%P") #used to deal with validation in Tcl
@@ -74,6 +77,8 @@ class Canvas_GUI:
         else:
             self.create_new_db()
         
+
+        self.init_connection_to_server()
 
         self.root.mainloop()
 
@@ -213,7 +218,33 @@ class Canvas_GUI:
         conn.close()
 
 
+    def init_connection_to_server(self):
+        self.client_socket = socket.socket()
+        
+        server_address = ('localhost', 1729)
+        self.client_socket.connect(server_address)
 
+        print(f'Connected to server {server_address[0]}:{server_address[1]}')
+
+        receive_thread = threading.Thread(target=self.receive_data, args=(self.client_socket,))
+        receive_thread.start()
+
+
+    def receive_data(self, client_socket):
+        while True:
+            # Receive data from the server
+            data = client_socket.recv(1024).decode()
+            if data == "exit":
+                break
+            
+            # Print the received data
+            print('Received from server:', data)
+
+        # Close the client socket
+        client_socket.close()
+
+    def send_data(self, *args):
+        self.client_socket.send("hello".encode())
 
 class Select_project_GUI:
     def __init__(self):
@@ -249,7 +280,7 @@ class Select_project_GUI:
         
         New_project_GUI()
 
-
+    
 
 
 
@@ -275,6 +306,32 @@ class New_project_GUI:
         else:
             tk.Label(text="NAME ALREADY TAKEN, PLEASE TRY AGAIN").pack()
 
+
+
+# class Client:
+#     def __init__(self):
+#         self.socket = socket.socket()
+        
+#         server_address = ('localhost', 1730)
+#         self.socket.connect(server_address)
+
+#         print(f'Connected to server {server_address[0]}:{server_address[1]}')
+
+#         receive_thread = threading.Thread(target=self.receive_data, args=(client_socket,))
+#         receive_thread.start()
+
+#     def recieve_data(self):
+#         while True:
+#             # Receive data from the server
+#             data = self.socket.recv(1024).decode()
+#             if data == "exit":
+#                 break
+            
+#             # Print the received data
+#             print('Received from server:', data)
+
+#         # Close the client socket
+#         self.socket.close()
 
 
 
