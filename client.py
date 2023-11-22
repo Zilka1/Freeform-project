@@ -53,8 +53,8 @@ class Canvas_GUI:
 
         tk.Button(self.colors_frame, text="REDO",font=font, command = self.redo_last_deleted_drawing).grid(row = 0, column = 7) # ↷
 
-        tk.Button(self.colors_frame, text="SAVE",font=font, command = self.save_canvas_sql).grid(row = 0, column = 8) # ↷
-        tk.Button(self.colors_frame, text="LOAD",font=font, command = self.load_canvas_sql).grid(row = 0, column = 9) # ↷
+        # tk.Button(self.colors_frame, text="SAVE",font=font, command = self.save_canvas_sql).grid(row = 0, column = 8) # ↷
+        # tk.Button(self.colors_frame, text="LOAD",font=font, command = self.load_canvas_sql).grid(row = 0, column = 9) # ↷
 
 
         # test_entry = tk.Entry(self.root)
@@ -69,13 +69,11 @@ class Canvas_GUI:
         self.canvas.config(cursor="none")
 
 
-
         if(exists):
             self.load_canvas_sql()
         else:
             self.create_new_db()
         
-
 
         self.root.mainloop()
 
@@ -117,7 +115,11 @@ class Canvas_GUI:
 
         self.cur_drawing.add_point((x,y))
 
-    def hide_target(self, event):
+    def end_drawing(self, *args): #*args to deal with event
+        self.drawings.append(self.cur_drawing)
+        self.save_row(self.cur_drawing)
+
+    def hide_target(self, *args): #*args to deal with event
         self.canvas.delete(self.target)
         self.target = -1
 
@@ -130,12 +132,6 @@ class Canvas_GUI:
         # self.target = self.canvas.create_oval(x1, y1, x2, y2, fill="", outline=self.color, dash=(2,1)) # shows the outline of the area you'd paint
         self.target = self.canvas.create_oval(x1, y1, x2, y2, fill="", outline=self.color) # shows the outline of the area you'd paint
 
-
-    def end_drawing(self, event):
-        # self.shapes.append(self.cur_shape)
-        
-        self.drawings.append(self.cur_drawing)
-
     def set_color(self, color):
         self.color = color
 
@@ -144,6 +140,14 @@ class Canvas_GUI:
             d = self.drawings.pop()
             d.delete_from_canvas()
             self.deleted_drawings.append(d)
+
+            #delete from db
+            conn = sqlite3.connect(self.full_path)
+            c = conn.cursor()
+            c.execute('DELETE FROM drawings WHERE ROWID = (SELECT MAX(ROWID) FROM drawings)')
+
+            conn.commit()
+            conn.close()
               
     def redo_last_deleted_drawing(self, *args): #*args to deal with event if given
         if self.deleted_drawings:
@@ -151,23 +155,25 @@ class Canvas_GUI:
             self.drawings.append(d)
             d.draw_drawing()
 
+            self.save_row(d)
+
     def width_entry_validation(self, value):
         return value == "" or (value.isnumeric() and int(value) <= 45)
 
 
-    def save_canvas_sql(self):
-        conn = sqlite3.connect(self.full_path)
-        c = conn.cursor()
+    # def save_canvas_sql(self):
+    #     conn = sqlite3.connect(self.full_path)
+    #     c = conn.cursor()
 
-        c.execute('DROP TABLE IF EXISTS drawings')  # Drop the table
+    #     c.execute('DROP TABLE IF EXISTS drawings')  # Drop the table
 
-        c.execute('CREATE TABLE IF NOT EXISTS drawings (color TEXT, width INTEGER, pt_list TEXT)')
+    #     c.execute('CREATE TABLE IF NOT EXISTS drawings (color TEXT, width INTEGER, pt_list TEXT)')
 
-        for d in self.drawings:
-            c.execute('INSERT INTO drawings VALUES (?, ?, ?)', (d.color, d.width, str(d.pt_list)))
+    #     for d in self.drawings:
+    #         self.save_row(d)
 
-        conn.commit()
-        conn.close()
+    #     conn.commit()
+    #     conn.close()
 
 
     def load_canvas_sql(self):
@@ -198,9 +204,13 @@ class Canvas_GUI:
         conn.close()
 
 
+    def save_row(self, d): #d is a Drawing object
+        conn = sqlite3.connect(self.full_path)
+        c = conn.cursor()
+        c.execute('INSERT INTO drawings VALUES (?, ?, ?)', (d.color, d.width, str(d.pt_list)))
 
-
-
+        conn.commit()
+        conn.close()
 
 
 
