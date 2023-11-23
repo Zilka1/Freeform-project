@@ -77,10 +77,16 @@ class Canvas_GUI:
         else:
             self.create_new_db()
         
+        self.window_open = True # Used to cut the connection when the user closes the window
 
         self.init_connection_to_server()
 
+        self.print_table()
+
         self.root.mainloop()
+
+        
+        self.window_open = False # Used to cut the connection when the user closes the window
 
 
     def start_drawing(self, event):
@@ -121,8 +127,15 @@ class Canvas_GUI:
         self.cur_drawing.add_point((x,y))
 
     def end_drawing(self, *args): #*args to deal with event
+        cur_id = self.get_id_from_db()
+        self.cur_drawing.id = cur_id
+
         self.drawings.append(self.cur_drawing)
         self.save_row(self.cur_drawing)
+
+
+        self.inc_id()
+        
 
     def hide_target(self, *args): #*args to deal with event
         self.canvas.delete(self.target)
@@ -149,7 +162,7 @@ class Canvas_GUI:
             #delete from db
             conn = sqlite3.connect(self.full_path)
             c = conn.cursor()
-            c.execute('DELETE FROM drawings WHERE ROWID = (SELECT MAX(ROWID) FROM drawings)')
+            c.execute('DELETE FROM drawings WHERE id = (SELECT MAX(ROWID) FROM drawings)')
 
             conn.commit()
             conn.close()
@@ -188,11 +201,12 @@ class Canvas_GUI:
         c.execute('SELECT * FROM drawings')
 
         for row in c.fetchall():
-            color = row[0]
-            width = row[1]
-            pt_list = row[2]
+            id = row[0]
+            color = row[1]
+            width = row[2]
+            pt_list = row[3]
 
-            d = Drawing(self.canvas, color, width, eval(pt_list))
+            d = Drawing(self.canvas, color, width, eval(pt_list), id)
             d.draw_drawing()
             self.drawings.append(d)
 
@@ -203,7 +217,10 @@ class Canvas_GUI:
         conn = sqlite3.connect(self.full_path)
         c = conn.cursor()
 
-        c.execute('CREATE TABLE drawings (color TEXT, width INTEGER, pt_list TEXT)')
+        #                                 
+        c.execute('CREATE TABLE drawings (id INTERGER, color TEXT, width INTEGER, pt_list TEXT)')
+        c.execute('CREATE TABLE variables (name TEXT, value INTEGER)')
+        c.execute('INSERT INTO variables VALUES (?, ?)', ("id", 0))
 
         conn.commit()
         conn.close()
@@ -212,7 +229,7 @@ class Canvas_GUI:
     def save_row(self, d): #d is a Drawing object
         conn = sqlite3.connect(self.full_path)
         c = conn.cursor()
-        c.execute('INSERT INTO drawings VALUES (?, ?, ?)', (d.color, d.width, str(d.pt_list)))
+        c.execute('INSERT INTO drawings VALUES (?, ?, ?, ?)', (d.id, d.color, d.width, str(d.pt_list)))
 
         conn.commit()
         conn.close()
@@ -231,7 +248,7 @@ class Canvas_GUI:
 
 
     def receive_data(self, client_socket):
-        while True:
+        while self.window_open:
             # Receive data from the server
             data = client_socket.recv(1024).decode()
             if data == "exit":
@@ -243,8 +260,64 @@ class Canvas_GUI:
         # Close the client socket
         client_socket.close()
 
+    def get_id_from_db(self):
+        conn = sqlite3.connect(self.full_path)
+        c = conn.cursor()
+
+        # c.execute("SELECT value FROM variables WHERE name = 'id'")
+        # id_ = c.fetchone()[0]
+
+        # c.execute('SELECT value FROM variables LIMIT 1 OFFSET 0;')
+
+        # id_ = int(c.fetchone()[0]) # [0] for the row, [1] for the column
+        # print(id_)
+
+        c.execute('SELECT * FROM variables')
+
+        id_ = c.fetchall()[0][1]
+
+
+        c.close()
+        conn.close()
+
+
+        # print(id_)
+        return id_
+
+
+    def inc_id(self):
+        conn = sqlite3.connect(self.full_path)
+        c = conn.cursor()
+
+        inc_cmd = '''
+            UPDATE variables
+            SET value = ? '''
+        
+        c.execute(inc_cmd, (self.get_id_from_db()+1,))
+        conn.commit()
+
+        c.close()
+        conn.close()
+
+
     def send_data(self, *args):
         self.client_socket.send("hello".encode())
+
+
+    # def print_table(self):
+    #     conn = sqlite3.connect(self.full_path)
+    #     c = conn.cursor()
+
+    #     with conn:
+    #         c.execute("SELECT * FROM drawings")
+    #         print(c.fetchall())
+
+    #     c.close()
+
+
+
+
+
 
 class Select_project_GUI:
     def __init__(self):
