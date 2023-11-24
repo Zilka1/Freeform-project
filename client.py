@@ -4,6 +4,7 @@ import sqlite3
 import os
 import socket
 import threading
+import pickle
 
 class Canvas_GUI:
     def __init__(self, file_name, exists = False):
@@ -43,7 +44,6 @@ class Canvas_GUI:
         tk.Button(self.colors_frame, text="BLUE",font=font, command = lambda: self.set_color("BLUE")).grid(row = 0, column = 1)
         tk.Button(self.colors_frame, text="RED",font=font, command = lambda: self.set_color("RED")).grid(row = 0, column = 2)
         tk.Button(self.colors_frame, text="ORANGE",font=font, command = lambda: self.set_color("ORANGE")).grid(row = 0, column = 3)
-        tk.Button(self.colors_frame, text="Send Data",font=font, command = self.send_data).grid(row = 0, column = 8)
 
 
         vcmd = (self.root.register(self.width_entry_validation), "%P") #used to deal with validation in Tcl
@@ -78,14 +78,10 @@ class Canvas_GUI:
             self.create_new_db()
         
         self.window_open = True # Used to cut the connection when the user closes the window
-
         self.init_connection_to_server()
-
-        self.print_table()
 
         self.root.mainloop()
 
-        
         self.window_open = False # Used to cut the connection when the user closes the window
 
 
@@ -131,6 +127,7 @@ class Canvas_GUI:
         self.cur_drawing.id = cur_id
 
         self.drawings.append(self.cur_drawing)
+        self.send_new_drawing(self.cur_drawing)
         self.save_row(self.cur_drawing)
 
 
@@ -162,7 +159,7 @@ class Canvas_GUI:
             #delete from db
             conn = sqlite3.connect(self.full_path)
             c = conn.cursor()
-            c.execute('DELETE FROM drawings WHERE id = (SELECT MAX(ROWID) FROM drawings)')
+            c.execute('DELETE FROM drawings WHERE id = (SELECT MAX(id) FROM drawings)')
 
             conn.commit()
             conn.close()
@@ -249,16 +246,44 @@ class Canvas_GUI:
 
     def receive_data(self, client_socket):
         while self.window_open:
-            # Receive data from the server
-            data = client_socket.recv(1024).decode()
-            if data == "exit":
-                break
-            
-            # Print the received data
-            print('Received from server:', data)
+            try:
+                # Set a timeout for the socket operation so it will know if the window is close
+                client_socket.settimeout(1)  # 1 second
 
-        # Close the client socket
-        client_socket.close()
+                CHUNK_SIZE = 1024
+                data = b''
+                while True:
+                    chunk = client_socket.recv(CHUNK_SIZE)
+                    data += chunk
+                    if len(chunk) < CHUNK_SIZE:
+                        break
+                
+                d = pickle.loads(data)
+                
+                # Concatenate the chunks
+                d_tuple = pickle.loads(data)
+
+                id_, color, width, pt_list = d_tuple
+
+                drawing = Drawing(self.canvas, color=color, id=id_, width=width, pt_list=pt_list)
+
+                self.drawings.append(drawing)
+                drawing.draw_drawing()
+                # print("appended drawing")
+
+
+
+                # if data == "exit":
+                #     break
+
+                # # Print the received data
+                # print('Received from server:', data)
+
+            except socket.timeout:
+                # Timeout occurred, check the window state
+                if not self.window_open:
+                    break
+                continue
 
     def get_id_from_db(self):
         conn = sqlite3.connect(self.full_path)
@@ -300,8 +325,13 @@ class Canvas_GUI:
         conn.close()
 
 
-    def send_data(self, *args):
-        self.client_socket.send("hello".encode())
+    def send_new_drawing(self, d): # d - Drawing object
+        # Define the data to be sent
+        data = pickle.dumps((d.id, d.color, d.width, d.pt_list))
+
+        self.client_socket.sendall(data)
+        # self.client_socket.sendall("hello my name is jeff im trying to make this string longer but its kinda hard to write a lot so im just writing bullshit until it gets past the chunk size did it get past the chunk size already who knows lets check".encode())
+
 
 
     # def print_table(self):

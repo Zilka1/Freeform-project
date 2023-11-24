@@ -7,9 +7,10 @@
 #
 #Need to add IDs to the drawings in the db
 
-
+from drawing import Drawing
 import socket
 import threading
+import pickle
 
 class Client:
     def __init__(self, socket, address): #needs project parameter
@@ -55,17 +56,29 @@ class Server:
     
     def handle_client(self, client):
         while True:
-            try:
-                data = client.socket.recv(1024).decode()
-                print(data)
-                if data == "exit":
-                    break
+            try:                
+                # data = b'' + client.socket.recv(1024)
+
+                CHUNK_SIZE = 1024
+                data = b''
+                while True:
+                    chunk = client.socket.recv(CHUNK_SIZE)
+                    data += chunk
+                    if len(chunk) < CHUNK_SIZE:
+                        break
                 
+                d = pickle.loads(data)
+
+                print("loaded pickle")
+                id_, color, width, pt_list = d
+                print(id_, color, width, pt_list)         
+
                 for c in self.client_list:
                     if c != client:
-                        c.socket.send(data.upper().encode())
+                        c.socket.send(pickle.dumps(d))
                 
             except:
+                print("couldnt get data from client")
                 break
         
         # Close the client socket
