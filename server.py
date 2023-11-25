@@ -12,6 +12,8 @@ import socket
 import threading
 import pickle
 
+import time
+
 class Client:
     def __init__(self, socket, address): #needs project parameter
         self.socket = socket
@@ -59,25 +61,19 @@ class Server:
             try:                
                 # data = b'' + client.socket.recv(1024)
 
-                CHUNK_SIZE = 1024
-                data = b''
-                while True:
-                    chunk = client.socket.recv(CHUNK_SIZE)
-                    data += chunk
-                    if len(chunk) < CHUNK_SIZE:
-                        break
-                
-                d = pickle.loads(data)
+                action = client.socket.recv(1024).decode()
+                print(action.split())
+                if action == "new_line":
+                    self.new_line(client)
+                elif action.split()[0] == "delete":
+                    self.delete_line(client, action.split()[1]) #client, id
 
-                print("loaded pickle")
-                id_, color, width, pt_list = d
-                print(id_, color, width, pt_list)         
 
-                for c in self.client_list:
-                    if c != client:
-                        c.socket.send(pickle.dumps(d))
                 
-            except:
+                
+            except Exception as e:
+                # ... PRINT THE ERROR MESSAGE ... #
+                print(e)
                 print("couldnt get data from client")
                 break
         
@@ -91,7 +87,32 @@ class Server:
         #     print(c.address)
 
 
+    def new_line(self, client):
+        CHUNK_SIZE = 1024
+        data = b''
+        while True:
+            chunk = client.socket.recv(CHUNK_SIZE)
+            data += chunk
+            if len(chunk) < CHUNK_SIZE:
+                break
+        
+        d = pickle.loads(data)
 
+        print("loaded pickle")
+        id_, color, width, pt_list = d
+        print(id_, color, width, pt_list)         
+
+        for c in self.client_list:
+            if c != client:
+                c.socket.send("new_line".encode())
+                time.sleep(0.01) # Solves TCP timing
+                c.socket.send(pickle.dumps(d))
+
+    def delete_line(self, client, id):
+        for c in self.client_list:
+            if c != client:
+                print("sending")
+                c.socket.send(("delete " + str(id)).encode())
 
     
 

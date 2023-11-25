@@ -156,13 +156,23 @@ class Canvas_GUI:
             d.delete_from_canvas()
             self.deleted_drawings.append(d)
 
-            #delete from db
+            # init connection to db
             conn = sqlite3.connect(self.full_path)
             c = conn.cursor()
-            c.execute('DELETE FROM drawings WHERE id = (SELECT MAX(id) FROM drawings)')
+
+            # get highest id
+            c.execute('SELECT id FROM drawings ORDER BY id DESC LIMIT 1')
+            id_ = c.fetchone()[0]
+
+            print("id", id_)
+
+            #delete from db
+            c.execute('DELETE FROM drawings WHERE id = ?', [id_])
 
             conn.commit()
             conn.close()
+
+            self.client_socket.send(("delete " + str(id_)).encode())
               
     def redo_last_deleted_drawing(self, *args): #*args to deal with event if given
         if self.deleted_drawings:
@@ -249,35 +259,14 @@ class Canvas_GUI:
             try:
                 # Set a timeout for the socket operation so it will know if the window is close
                 client_socket.settimeout(1)  # 1 second
-
-                CHUNK_SIZE = 1024
-                data = b''
-                while True:
-                    chunk = client_socket.recv(CHUNK_SIZE)
-                    data += chunk
-                    if len(chunk) < CHUNK_SIZE:
-                        break
                 
-                d = pickle.loads(data)
+                action = client_socket.recv(1024).decode()
+
+                if action == "new_line":
+                    self.new_line()
+                elif action.split()[0] == "delete":
+                    self.delete_line(int(action.split()[1])) 
                 
-                # Concatenate the chunks
-                d_tuple = pickle.loads(data)
-
-                id_, color, width, pt_list = d_tuple
-
-                drawing = Drawing(self.canvas, color=color, id=id_, width=width, pt_list=pt_list)
-
-                self.drawings.append(drawing)
-                drawing.draw_drawing()
-                # print("appended drawing")
-
-
-
-                # if data == "exit":
-                #     break
-
-                # # Print the received data
-                # print('Received from server:', data)
 
             except socket.timeout:
                 # Timeout occurred, check the window state
@@ -288,14 +277,6 @@ class Canvas_GUI:
     def get_id_from_db(self):
         conn = sqlite3.connect(self.full_path)
         c = conn.cursor()
-
-        # c.execute("SELECT value FROM variables WHERE name = 'id'")
-        # id_ = c.fetchone()[0]
-
-        # c.execute('SELECT value FROM variables LIMIT 1 OFFSET 0;')
-
-        # id_ = int(c.fetchone()[0]) # [0] for the row, [1] for the column
-        # print(id_)
 
         c.execute('SELECT * FROM variables')
 
@@ -329,10 +310,49 @@ class Canvas_GUI:
         # Define the data to be sent
         data = pickle.dumps((d.id, d.color, d.width, d.pt_list))
 
+        self.client_socket.send("new_line".encode())
         self.client_socket.sendall(data)
         # self.client_socket.sendall("hello my name is jeff im trying to make this string longer but its kinda hard to write a lot so im just writing bullshit until it gets past the chunk size did it get past the chunk size already who knows lets check".encode())
 
 
+    def new_line(self):
+        CHUNK_SIZE = 1024
+        data = b''
+        while True:
+            chunk = self.client_socket.recv(CHUNK_SIZE)
+            data += chunk
+            if len(chunk) < CHUNK_SIZE:
+                break
+        
+        d_tuple = pickle.loads(data)
+
+        id_, color, width, pt_list = d_tuple
+
+        drawing = Drawing(self.canvas, color=color, id=id_, width=width, pt_list=pt_list)
+
+        self.drawings.append(drawing)
+        drawing.draw_drawing()
+
+
+    def delete_line(self, id_):
+        for d in self.drawings:
+            print("checking drawing")
+            if d.id == id_:
+                print("this drawing")
+
+                self.drawings.remove(d)
+                d.delete_from_canvas()
+                self.deleted_drawings.append(d)
+
+                # conn = sqlite3.connect(self.full_path)
+                # c = conn.cursor()
+
+                # c.execute('DELETE FROM drawings WHERE id = ?', [id_])
+
+                # conn.commit()
+                # conn.close()
+
+                break
 
     # def print_table(self):
     #     conn = sqlite3.connect(self.full_path)
