@@ -91,7 +91,7 @@ class Canvas_GUI:
         self.deleted_drawings = [] # Clears the redo option
 
         self.prev_x, self.prev_y = event.x, event.y
-        self.cur_drawing = Drawing(self.canvas, self.color, width)
+        self.cur_drawing = Drawing(self.color, width)
 
 
         circle_off = width/2 - 1
@@ -153,7 +153,7 @@ class Canvas_GUI:
     def delete_last_drawing(self, *args): #*args to deal with event if given   
         if self.drawings:
             d = self.drawings.pop()
-            d.delete_from_canvas()
+            d.delete_from_canvas(self.canvas)
             self.deleted_drawings.append(d)
 
             # init connection to db
@@ -178,7 +178,7 @@ class Canvas_GUI:
         if self.deleted_drawings:
             d = self.deleted_drawings.pop()
             self.drawings.append(d)
-            d.draw_drawing()
+            d.draw_drawing(self.canvas)
 
             self.save_row(d)
 
@@ -213,8 +213,8 @@ class Canvas_GUI:
             width = row[2]
             pt_list = row[3]
 
-            d = Drawing(self.canvas, color, width, eval(pt_list), id)
-            d.draw_drawing()
+            d = Drawing(color, width, eval(pt_list), id)
+            d.draw_drawing(self.canvas)
             self.drawings.append(d)
 
         conn.close()
@@ -328,10 +328,10 @@ class Canvas_GUI:
 
         id_, color, width, pt_list = d_tuple
 
-        drawing = Drawing(self.canvas, color=color, id=id_, width=width, pt_list=pt_list)
+        drawing = Drawing(color=color, id=id_, width=width, pt_list=pt_list)
 
         self.drawings.append(drawing)
-        drawing.draw_drawing()
+        drawing.draw_drawing(self.canvas)
 
 
     def delete_line(self, id_):
@@ -341,7 +341,7 @@ class Canvas_GUI:
                 print("this drawing")
 
                 self.drawings.remove(d)
-                d.delete_from_canvas()
+                d.delete_from_canvas(self.canvas)
                 self.deleted_drawings.append(d)
 
                 # conn = sqlite3.connect(self.full_path)
