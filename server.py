@@ -11,19 +11,29 @@ from drawing import Drawing
 import socket
 import threading
 import pickle
-
+import sqlite3
 import time
 
 class Client:
-    def __init__(self, socket, address): #needs project parameter
+    def __init__(self, socket, address, project=None): #needs project parameter
         self.socket = socket
         self.address = address
+        self.project = project
 
     def print_connection(self):
         print(f'Client connected: {self.address[0]}:{self.address[1]}')
     
     def close(self):
         socket.close()
+
+    def set_project(self, project_name):
+        self.project = project_name
+        self.path = r'C:\Users\hp\Desktop\Freeform project\projects (db)\\' + self.project
+
+# Example usage:
+# client = Client(socket, address)
+# project_name = "Project1"
+# set_project(client, project_name)
     
 
         
@@ -49,6 +59,9 @@ class Server:
             new_client = Client(client_socket, client_address)
             self.client_list.append(new_client)
             new_client.print_connection()
+
+            # for c in self.client_list:
+            #     print(c.address)
             
 
             # Create a new thread to handle the client
@@ -58,7 +71,13 @@ class Server:
     
     def handle_client(self, client):
         while True:
-            try:                
+            try:
+                if client.project == None:
+                    project_name = client.socket.recv(1024).decode()
+                    client.set_project(project_name)
+
+
+
                 # data = b'' + client.socket.recv(1024)
 
                 action = client.socket.recv(1024).decode()
@@ -88,6 +107,7 @@ class Server:
 
 
     def new_line(self, client):
+        # Receive drawing
         CHUNK_SIZE = 1024
         data = b''
         while True:
@@ -96,23 +116,39 @@ class Server:
             if len(chunk) < CHUNK_SIZE:
                 break
         
-        d = pickle.loads(data)
+        d = pickle.loads(data) # d is a Drawing object   
 
-        print("loaded pickle")
-        id_, color, width, pt_list = d
-        print(id_, color, width, pt_list)         
+        # Update DB
+        conn = sqlite3.connect(client.path)
+        c = conn.cursor()
+        c.execute('INSERT INTO drawings VALUES (?, ?, ?, ?)', (d.id, d.color, d.width, str(d.pt_list)))
 
+        conn.commit()
+        conn.close()
+
+        # Send to other clients
         for c in self.client_list:
-            if c != client:
+            if (c != client and c.project == client.project):
                 c.socket.send("new_line".encode())
                 time.sleep(0.01) # Solves TCP timing
                 c.socket.send(pickle.dumps(d))
 
-    def delete_line(self, client, id):
+
+
+        
+
+    def delete_line(self, client, id_):
+        # Delete from db
+        conn = sqlite3.connect(client.path)
+        c = conn.cursor()
+        c.execute('DELETE FROM drawings WHERE id = ?', [id_])
+
+        conn.commit()
+        conn.close()
+
         for c in self.client_list:
-            if c != client:
-                print("sending")
-                c.socket.send(("delete " + str(id)).encode())
+            if (c != client and c.project == client.project):
+                c.socket.send(("delete " + str(id_)).encode())
 
     
 

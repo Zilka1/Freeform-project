@@ -7,10 +7,12 @@ import threading
 import pickle
 
 class Canvas_GUI:
-    def __init__(self, file_name, exists = False):
+    def __init__(self, client_socket, file_name, exists = False):
         self.dir = r'C:\Users\hp\Desktop\Freeform project\projects (db)\\'
         self.file_name = file_name
         self.full_path = self.dir + self.file_name
+
+        self.client_socket = client_socket
         
         self.drawings = []
         self.deleted_drawings = []
@@ -78,7 +80,9 @@ class Canvas_GUI:
             self.create_new_db()
         
         self.window_open = True # Used to cut the connection when the user closes the window
-        self.init_connection_to_server()
+        
+        receive_thread = threading.Thread(target=self.receive_data, args=(self.client_socket,))
+        receive_thread.start()
 
         self.root.mainloop()
 
@@ -128,7 +132,7 @@ class Canvas_GUI:
 
         self.drawings.append(self.cur_drawing)
         self.send_new_drawing(self.cur_drawing)
-        self.save_row(self.cur_drawing)
+        # self.save_row(self.cur_drawing)
 
 
         self.inc_id()
@@ -166,8 +170,8 @@ class Canvas_GUI:
 
             print("id", id_)
 
-            #delete from db
-            c.execute('DELETE FROM drawings WHERE id = ?', [id_])
+            # #delete from db
+            # c.execute('DELETE FROM drawings WHERE id = ?', [id_])
 
             conn.commit()
             conn.close()
@@ -180,7 +184,9 @@ class Canvas_GUI:
             self.drawings.append(d)
             d.draw_drawing(self.canvas)
 
-            self.save_row(d)
+            self.send_new_drawing(d)
+
+            # self.save_row(d)
 
     def width_entry_validation(self, value):
         return value == "" or (value.isnumeric() and int(value) <= 45)
@@ -233,25 +239,25 @@ class Canvas_GUI:
         conn.close()
 
 
-    def save_row(self, d): #d is a Drawing object
-        conn = sqlite3.connect(self.full_path)
-        c = conn.cursor()
-        c.execute('INSERT INTO drawings VALUES (?, ?, ?, ?)', (d.id, d.color, d.width, str(d.pt_list)))
+    # def save_row(self, d): #d is a Drawing object
+    #     conn = sqlite3.connect(self.full_path)
+    #     c = conn.cursor()
+    #     c.execute('INSERT INTO drawings VALUES (?, ?, ?, ?)', (d.id, d.color, d.width, str(d.pt_list)))
 
-        conn.commit()
-        conn.close()
+    #     conn.commit()
+    #     conn.close()
 
 
-    def init_connection_to_server(self):
-        self.client_socket = socket.socket()
+    # def init_connection_to_server(self):
+    #     self.client_socket = socket.socket()
         
-        server_address = ('localhost', 1729)
-        self.client_socket.connect(server_address)
+    #     server_address = ('localhost', 1729)
+    #     self.client_socket.connect(server_address)
 
-        print(f'Connected to server {server_address[0]}:{server_address[1]}')
+    #     print(f'Connected to server {server_address[0]}:{server_address[1]}')
 
-        receive_thread = threading.Thread(target=self.receive_data, args=(self.client_socket,))
-        receive_thread.start()
+    #     receive_thread = threading.Thread(target=self.receive_data, args=(self.client_socket,))
+    #     receive_thread.start()
 
 
     def receive_data(self, client_socket):
@@ -308,7 +314,7 @@ class Canvas_GUI:
 
     def send_new_drawing(self, d): # d - Drawing object
         # Define the data to be sent
-        data = pickle.dumps((d.id, d.color, d.width, d.pt_list))
+        data = pickle.dumps(d)
 
         self.client_socket.send("new_line".encode())
         self.client_socket.sendall(data)
@@ -324,25 +330,20 @@ class Canvas_GUI:
             if len(chunk) < CHUNK_SIZE:
                 break
         
-        d_tuple = pickle.loads(data)
-
-        id_, color, width, pt_list = d_tuple
-
-        drawing = Drawing(color=color, id=id_, width=width, pt_list=pt_list)
+        drawing = pickle.loads(data)
 
         self.drawings.append(drawing)
         drawing.draw_drawing(self.canvas)
 
 
-    def delete_line(self, id_):
+    def delete_line(self, id_, is_this_user = False):
         for d in self.drawings:
-            print("checking drawing")
             if d.id == id_:
-                print("this drawing")
-
                 self.drawings.remove(d)
                 d.delete_from_canvas(self.canvas)
-                self.deleted_drawings.append(d)
+
+                if is_this_user: #Only append drawing if it was deleted by this user
+                    self.deleted_drawings.append(d)
 
                 # conn = sqlite3.connect(self.full_path)
                 # c = conn.cursor()
@@ -371,6 +372,8 @@ class Canvas_GUI:
 
 class Select_project_GUI:
     def __init__(self):
+        self.init_connection_to_server()
+
         self.dir = r'C:\Users\hp\Desktop\Freeform project\projects (db)\\'
         files = os.listdir(self.dir)
         db_files = list(filter(self.is_db_file, files))
@@ -395,13 +398,22 @@ class Select_project_GUI:
         self.root.destroy()
 
         # file = self.dir + file_name
-        
-        Canvas_GUI(file_name, True)
+        self.client_socket.send(file_name.encode()) 
+
+        Canvas_GUI(self.client_socket, file_name, True)
 
     def new_project(self):
         self.root.destroy()
         
-        New_project_GUI()
+        New_project_GUI(self.client_socket)
+    
+    def init_connection_to_server(self):
+        self.client_socket = socket.socket()
+        
+        server_address = ('localhost', 1729)
+        self.client_socket.connect(server_address)
+
+        print(f'Connected to server {server_address[0]}:{server_address[1]}')
 
     
 
@@ -410,7 +422,9 @@ class Select_project_GUI:
 
 
 class New_project_GUI:
-    def __init__(self):
+    def __init__(self, client_socket):
+        self.client_socket = client_socket
+
         self.dir = r'C:\Users\hp\Desktop\Freeform project\projects (db)\\'
         self.root = tk.Tk()
         self.root.geometry("400x400")
@@ -425,7 +439,8 @@ class New_project_GUI:
         name = self.entry.get() + ".db"
         if(name not in os.listdir(self.dir)):
             self.root.destroy()
-            Canvas_GUI(name, False)
+            self.client_socket.send(name.encode()) 
+            Canvas_GUI(self.client_socket, name, False)
         else:
             tk.Label(text="NAME ALREADY TAKEN, PLEASE TRY AGAIN").pack()
 
