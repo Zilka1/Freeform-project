@@ -77,17 +77,33 @@ class Server:
                     client.set_project(project_name)
 
 
-
                 # data = b'' + client.socket.recv(1024)
 
-                action = client.socket.recv(1024).decode()
-                print(action.split())
+                CHUNK_SIZE = 1024
+                data = b''
+                while True:
+                    chunk = client.socket.recv(CHUNK_SIZE)
+                    data += chunk
+                    if len(chunk) < CHUNK_SIZE:
+                        break
+                
+                action, content = pickle.loads(data)
+
+
+                print("action:", action)
+                print("content:", content)
+
                 if action == "new_line":
-                    self.new_line(client)
+                    self.new_line(client, content)
                 elif action.split()[0] == "delete":
-                    self.delete_line(client, action.split()[1]) #client, id
-
-
+                    self.delete_line(client, content) #client, id
+                elif action == "get_and_inc_id":
+                    self.get_and_inc_id(client)
+                # elif action == "get_id":
+                #     self.send_id(client)
+                # elif action == "inc_id":
+                #     self.inc_id(client)
+                
                 
                 
             except Exception as e:
@@ -106,18 +122,7 @@ class Server:
         #     print(c.address)
 
 
-    def new_line(self, client):
-        # Receive drawing
-        CHUNK_SIZE = 1024
-        data = b''
-        while True:
-            chunk = client.socket.recv(CHUNK_SIZE)
-            data += chunk
-            if len(chunk) < CHUNK_SIZE:
-                break
-        
-        d = pickle.loads(data) # d is a Drawing object   
-
+    def new_line(self, client, d): # d - Drawing object
         # Update DB
         conn = sqlite3.connect(client.path)
         c = conn.cursor()
@@ -149,6 +154,72 @@ class Server:
         for c in self.client_list:
             if (c != client and c.project == client.project):
                 c.socket.send(("delete " + str(id_)).encode())
+
+
+    # def get_id_from_db(self, client):
+    #     conn = sqlite3.connect(client.path)
+    #     c = conn.cursor()
+
+    #     c.execute('SELECT * FROM variables')
+
+    #     id_ = c.fetchall()[0][1]
+
+
+    #     c.close()
+    #     conn.close()
+
+    #     # client.socket.send(str(id_).encode())
+
+    #     return id_
+
+
+    #     # print(id_)
+    #     # return id_
+    
+    # def inc_id(self, client):
+    #     cur_id = self.get_id_from_db(client)
+
+    #     print(cur_id)
+
+    #     conn = sqlite3.connect(client.path)
+    #     c = conn.cursor()
+
+    #     inc_cmd = '''
+    #         UPDATE variables
+    #         SET value = ? '''
+        
+    #     c.execute(inc_cmd, (cur_id+1,))
+    #     conn.commit()
+
+    #     c.close()
+    #     conn.close()
+
+    # def send_id(self, client):
+    #     client.socket.send(str(self.get_id_from_db(client)).encode())
+
+    def get_and_inc_id(self, client):
+        conn = sqlite3.connect(client.path)
+        c = conn.cursor()
+
+        c.execute('SELECT * FROM variables')
+
+        id_ = c.fetchall()[0][1]
+
+        print(id_)
+
+        client.socket.send(str(id_).encode())
+
+        inc_cmd = '''
+            UPDATE variables
+            SET value = ? '''
+        
+        c.execute(inc_cmd, (id_+1,))
+        conn.commit()
+        conn.close()
+
+        
+
+        # return id_
 
     
 

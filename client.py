@@ -5,6 +5,8 @@ import os
 import socket
 import threading
 import pickle
+import queue
+# import time
 
 class Canvas_GUI:
     def __init__(self, client_socket, file_name, exists = False):
@@ -13,7 +15,7 @@ class Canvas_GUI:
         self.full_path = self.dir + self.file_name
 
         self.client_socket = client_socket
-        
+
         self.drawings = []
         self.deleted_drawings = []
 
@@ -29,7 +31,7 @@ class Canvas_GUI:
 
         self.canvas.bind("<ButtonPress-1>", self.start_drawing)
         self.canvas.bind("<B1-Motion>", self.draw)
-        self.canvas.bind("<ButtonRelease-1>", self.end_drawing)
+        self.canvas.bind("<ButtonRelease-1>", lambda e: threading.Thread(target=self.end_drawing).start())
         
         self.canvas.bind("<Motion>", self.move_target)
         self.canvas.bind("<Leave>", self.hide_target)
@@ -53,13 +55,8 @@ class Canvas_GUI:
         self.line_width_entry.grid(row=0,column=4)
         self.line_width_entry.insert(0, "10") # Sets starting width
 
-        delete_button = tk.Button(self.colors_frame, text="UNDO", font=font, command=self.delete_last_drawing) # ↶
-        delete_button.grid(row = 0, column=5)
-
+        tk.Button(self.colors_frame, text="UNDO", font=font, command=self.delete_last_drawing).grid(row=0, column=6) # ↶
         tk.Button(self.colors_frame, text="REDO",font=font, command = self.redo_last_deleted_drawing).grid(row = 0, column = 7) # ↷
-
-        # tk.Button(self.colors_frame, text="SAVE",font=font, command = self.save_canvas_sql).grid(row = 0, column = 8) # ↷
-        # tk.Button(self.colors_frame, text="LOAD",font=font, command = self.load_canvas_sql).grid(row = 0, column = 9) # ↷
 
 
         # test_entry = tk.Entry(self.root)
@@ -81,6 +78,8 @@ class Canvas_GUI:
         
         self.window_open = True # Used to cut the connection when the user closes the window
         
+        self.receive_lock = threading.Lock()
+
         receive_thread = threading.Thread(target=self.receive_data, args=(self.client_socket,))
         receive_thread.start()
 
@@ -127,16 +126,12 @@ class Canvas_GUI:
         self.cur_drawing.add_point((x,y))
 
     def end_drawing(self, *args): #*args to deal with event
-        cur_id = self.get_id_from_db()
+        cur_id = self.get_and_inc_id()
+        print("id:", cur_id)
         self.cur_drawing.id = cur_id
 
         self.drawings.append(self.cur_drawing)
-        self.send_new_drawing(self.cur_drawing)
-        # self.save_row(self.cur_drawing)
-
-
-        self.inc_id()
-        
+        self.send_new_drawing(self.cur_drawing)        
 
     def hide_target(self, *args): #*args to deal with event
         self.canvas.delete(self.target)
@@ -160,23 +155,12 @@ class Canvas_GUI:
             d.delete_from_canvas(self.canvas)
             self.deleted_drawings.append(d)
 
-            # init connection to db
-            conn = sqlite3.connect(self.full_path)
-            c = conn.cursor()
-
-            # get highest id
-            c.execute('SELECT id FROM drawings ORDER BY id DESC LIMIT 1')
-            id_ = c.fetchone()[0]
-
+            # get id to delete
+            id_ = d.id
+            
             print("id", id_)
 
-            # #delete from db
-            # c.execute('DELETE FROM drawings WHERE id = ?', [id_])
-
-            conn.commit()
-            conn.close()
-
-            self.client_socket.send(("delete " + str(id_)).encode())
+            self.client_socket.send(pickle.dumps(("delete", id_)))
               
     def redo_last_deleted_drawing(self, *args): #*args to deal with event if given
         if self.deleted_drawings:
@@ -190,21 +174,6 @@ class Canvas_GUI:
 
     def width_entry_validation(self, value):
         return value == "" or (value.isnumeric() and int(value) <= 45)
-
-
-    # def save_canvas_sql(self):
-    #     conn = sqlite3.connect(self.full_path)
-    #     c = conn.cursor()
-
-    #     c.execute('DROP TABLE IF EXISTS drawings')  # Drop the table
-
-    #     c.execute('CREATE TABLE IF NOT EXISTS drawings (color TEXT, width INTEGER, pt_list TEXT)')
-
-    #     for d in self.drawings:
-    #         self.save_row(d)
-
-    #     conn.commit()
-    #     conn.close()
 
 
     def load_canvas_sql(self):
@@ -239,40 +208,20 @@ class Canvas_GUI:
         conn.close()
 
 
-    # def save_row(self, d): #d is a Drawing object
-    #     conn = sqlite3.connect(self.full_path)
-    #     c = conn.cursor()
-    #     c.execute('INSERT INTO drawings VALUES (?, ?, ?, ?)', (d.id, d.color, d.width, str(d.pt_list)))
-
-    #     conn.commit()
-    #     conn.close()
-
-
-    # def init_connection_to_server(self):
-    #     self.client_socket = socket.socket()
-        
-    #     server_address = ('localhost', 1729)
-    #     self.client_socket.connect(server_address)
-
-    #     print(f'Connected to server {server_address[0]}:{server_address[1]}')
-
-    #     receive_thread = threading.Thread(target=self.receive_data, args=(self.client_socket,))
-    #     receive_thread.start()
-
-
     def receive_data(self, client_socket):
         while self.window_open:
             try:
-                # Set a timeout for the socket operation so it will know if the window is close
-                client_socket.settimeout(1)  # 1 second
+                # Set a timeout for the socket operation so it will know if the window is closed
+                client_socket.settimeout(0.05)  # 0.1 second
                 
-                action = client_socket.recv(1024).decode()
+                with self.receive_lock:
+                    action = client_socket.recv(1024).decode()
+                    print("action:", action)
 
                 if action == "new_line":
                     self.new_line()
                 elif action.split()[0] == "delete":
                     self.delete_line(int(action.split()[1])) 
-                
 
             except socket.timeout:
                 # Timeout occurred, check the window state
@@ -280,43 +229,11 @@ class Canvas_GUI:
                     break
                 continue
 
-    def get_id_from_db(self):
-        conn = sqlite3.connect(self.full_path)
-        c = conn.cursor()
-
-        c.execute('SELECT * FROM variables')
-
-        id_ = c.fetchall()[0][1]
-
-
-        c.close()
-        conn.close()
-
-
-        # print(id_)
-        return id_
-
-
-    def inc_id(self):
-        conn = sqlite3.connect(self.full_path)
-        c = conn.cursor()
-
-        inc_cmd = '''
-            UPDATE variables
-            SET value = ? '''
-        
-        c.execute(inc_cmd, (self.get_id_from_db()+1,))
-        conn.commit()
-
-        c.close()
-        conn.close()
-
 
     def send_new_drawing(self, d): # d - Drawing object
         # Define the data to be sent
-        data = pickle.dumps(d)
-
-        self.client_socket.send("new_line".encode())
+        data = pickle.dumps(("new_line", d))
+        print(d)
         self.client_socket.sendall(data)
         # self.client_socket.sendall("hello my name is jeff im trying to make this string longer but its kinda hard to write a lot so im just writing bullshit until it gets past the chunk size did it get past the chunk size already who knows lets check".encode())
 
@@ -355,15 +272,14 @@ class Canvas_GUI:
 
                 break
 
-    # def print_table(self):
-    #     conn = sqlite3.connect(self.full_path)
-    #     c = conn.cursor()
+    def get_and_inc_id(self):
+        with self.receive_lock:
+            self.client_socket.send(pickle.dumps(("get_and_inc_id", None)))
+            id_ = int(self.client_socket.recv(1024).decode())
 
-    #     with conn:
-    #         c.execute("SELECT * FROM drawings")
-    #         print(c.fetchall())
+        print("id from server", id_)
 
-    #     c.close()
+        return id_
 
 
 
