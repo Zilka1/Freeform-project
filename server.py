@@ -1,21 +1,29 @@
 #Make a list of clients - DONE
-#When data is received, update the db and send the data to all clients beside the client that sent the data - 1/2
+#When data is received, update the db and send the data to all clients beside the client that sent the data - DONE
 #Choose project to work on through the server
 #   Send the client only the names of the files, and when they choose a file send them all of it
-#Clients will not edit the db they receive, it's only for initalization
-#Clients need to handle getting data from the server and implementing it
+#Clients will not edit the db they receive, it's only for initalization - DONE*
+#Clients need to handle getting data from the server and implementing it - DONE
 #
-#Need to add IDs to the drawings in the db
+#Need to add IDs to the drawings in the db - DONE
+
+
+# Notes on some problems:
+# client checks if new project name is valid based on the list it got before
+# client receiving from server with threading lock can be problematic
 
 from drawing import Drawing
 import socket
 import threading
 import pickle
 import sqlite3
+import os
 import time
 
 class Client:
     def __init__(self, socket, address, project=None): #needs project parameter
+        self.dir = r'C:\Users\hp\Desktop\Freeform project\projects (db)\\'
+        
         self.socket = socket
         self.address = address
         self.project = project
@@ -28,7 +36,7 @@ class Client:
 
     def set_project(self, project_name):
         self.project = project_name
-        self.path = r'C:\Users\hp\Desktop\Freeform project\projects (db)\\' + self.project
+        self.path = self.dir + self.project
 
 # Example usage:
 # client = Client(socket, address)
@@ -72,11 +80,6 @@ class Server:
     def handle_client(self, client):
         while True:
             try:
-                if client.project == None:
-                    project_name = client.socket.recv(1024).decode()
-                    client.set_project(project_name)
-
-
                 # data = b'' + client.socket.recv(1024)
 
                 CHUNK_SIZE = 1024
@@ -93,12 +96,21 @@ class Server:
                 print("action:", action)
                 print("content:", content)
 
-                if action == "new_line":
+                if action == "set_project_name":
+                    client.set_project(content)
+                elif action == "get_projects_names":
+                    self.get_projects_names(client)
+                elif action == "new_line":
                     self.new_line(client, content)
                 elif action.split()[0] == "delete":
                     self.delete_line(client, content) #client, id
                 elif action == "get_and_inc_id":
                     self.get_and_inc_id(client)
+                elif action == "create_new_db":
+                    self.create_new_db(client)
+                elif action == "load_canvas":
+                    self.load_canvas_sql(client)
+
                 # elif action == "get_id":
                 #     self.send_id(client)
                 # elif action == "inc_id":
@@ -134,9 +146,7 @@ class Server:
         # Send to other clients
         for c in self.client_list:
             if (c != client and c.project == client.project):
-                c.socket.send("new_line".encode())
-                time.sleep(0.01) # Solves TCP timing
-                c.socket.send(pickle.dumps(d))
+                c.socket.send(pickle.dumps(("new_line", d)))
 
 
 
@@ -153,7 +163,7 @@ class Server:
 
         for c in self.client_list:
             if (c != client and c.project == client.project):
-                c.socket.send(("delete " + str(id_)).encode())
+                c.socket.send(pickle.dumps(("delete", id_)))
 
 
     # def get_id_from_db(self, client):
@@ -220,8 +230,50 @@ class Server:
         
 
         # return id_
-
     
 
-# Start the server
-Server()
+    def create_new_db(self, client):
+        conn = sqlite3.connect(client.path)
+        c = conn.cursor()
+
+        c.execute('CREATE TABLE drawings (id INTERGER, color TEXT, width INTEGER, pt_list TEXT)')
+        c.execute('CREATE TABLE variables (name TEXT, value INTEGER)')
+        c.execute('INSERT INTO variables VALUES (?, ?)', ("id", 0))
+
+        conn.commit()
+        conn.close()
+    
+    def load_canvas_sql(self, client):
+        conn = sqlite3.connect(client.path)
+        c = conn.cursor()
+
+        c.execute('SELECT * FROM drawings')
+
+        drawings = []
+
+        for row in c.fetchall():
+            id = row[0]
+            color = row[1]
+            width = row[2]
+            pt_list = row[3]
+
+            d = Drawing(color, width, eval(pt_list), id)
+            drawings.append(d)
+
+
+        client.socket.send(pickle.dumps(drawings))
+
+        conn.close()
+
+    def is_db_file(self, file):
+        return file[-3:] == ".db" #checks the last 3 characters in the string
+
+    def get_projects_names(self, client):
+        files = os.listdir(client.dir)
+        db_files = list(filter(self.is_db_file, files))
+        
+        client.socket.send(pickle.dumps(db_files))
+
+if __name__ == "__main__":
+    # Start the server
+    Server()

@@ -1,7 +1,7 @@
 from drawing import Drawing
 import tkinter as tk
-import sqlite3
-import os
+# import sqlite3
+# import os
 import socket
 import threading
 import pickle
@@ -69,16 +69,15 @@ class Canvas_GUI:
 
 
         self.canvas.config(cursor="none")
-
+        
+        self.window_open = True # Used to cut the connection when the user closes the window
+        
+        self.receive_lock = threading.Lock()
 
         if(exists):
             self.load_canvas_sql()
         else:
             self.create_new_db()
-        
-        self.window_open = True # Used to cut the connection when the user closes the window
-        
-        self.receive_lock = threading.Lock()
 
         receive_thread = threading.Thread(target=self.receive_data, args=(self.client_socket,))
         receive_thread.start()
@@ -177,35 +176,25 @@ class Canvas_GUI:
 
 
     def load_canvas_sql(self):
-        conn = sqlite3.connect(self.full_path)
-        c = conn.cursor()
+        self.client_socket.send(pickle.dumps(("load_canvas", None)))
+        
+        with self.receive_lock:
+            CHUNK_SIZE = 1024
+            data = b''
+            while True:
+                chunk = self.client_socket.recv(CHUNK_SIZE)
+                data += chunk
+                if len(chunk) < CHUNK_SIZE:
+                    break
 
-        c.execute('SELECT * FROM drawings')
-
-        for row in c.fetchall():
-            id = row[0]
-            color = row[1]
-            width = row[2]
-            pt_list = row[3]
-
-            d = Drawing(color, width, eval(pt_list), id)
+        drawings = pickle.loads(data)
+        for d in drawings:
             d.draw_drawing(self.canvas)
             self.drawings.append(d)
 
-        conn.close()
-
 
     def create_new_db(self):
-        conn = sqlite3.connect(self.full_path)
-        c = conn.cursor()
-
-        #                                 
-        c.execute('CREATE TABLE drawings (id INTERGER, color TEXT, width INTEGER, pt_list TEXT)')
-        c.execute('CREATE TABLE variables (name TEXT, value INTEGER)')
-        c.execute('INSERT INTO variables VALUES (?, ?)', ("id", 0))
-
-        conn.commit()
-        conn.close()
+        self.client_socket.send(pickle.dumps(("create_new_db", None)))
 
 
     def receive_data(self, client_socket):
@@ -215,13 +204,22 @@ class Canvas_GUI:
                 client_socket.settimeout(0.05)  # 0.1 second
                 
                 with self.receive_lock:
-                    action = client_socket.recv(1024).decode()
-                    print("action:", action)
+                    CHUNK_SIZE = 1024
+                    data = b''
+                    while True:
+                        chunk = client_socket.recv(CHUNK_SIZE)
+                        data += chunk
+                        if len(chunk) < CHUNK_SIZE:
+                            break
+                
+                action, content = pickle.loads(data)
+                print("action:", action)
+                print("content:", content)
 
                 if action == "new_line":
-                    self.new_line()
-                elif action.split()[0] == "delete":
-                    self.delete_line(int(action.split()[1])) 
+                    self.new_line(content)
+                elif action == "delete":
+                    self.delete_line(content) 
 
             except socket.timeout:
                 # Timeout occurred, check the window state
@@ -238,17 +236,7 @@ class Canvas_GUI:
         # self.client_socket.sendall("hello my name is jeff im trying to make this string longer but its kinda hard to write a lot so im just writing bullshit until it gets past the chunk size did it get past the chunk size already who knows lets check".encode())
 
 
-    def new_line(self):
-        CHUNK_SIZE = 1024
-        data = b''
-        while True:
-            chunk = self.client_socket.recv(CHUNK_SIZE)
-            data += chunk
-            if len(chunk) < CHUNK_SIZE:
-                break
-        
-        drawing = pickle.loads(data)
-
+    def new_line(self, drawing):
         self.drawings.append(drawing)
         drawing.draw_drawing(self.canvas)
 
@@ -261,14 +249,6 @@ class Canvas_GUI:
 
                 if is_this_user: #Only append drawing if it was deleted by this user
                     self.deleted_drawings.append(d)
-
-                # conn = sqlite3.connect(self.full_path)
-                # c = conn.cursor()
-
-                # c.execute('DELETE FROM drawings WHERE id = ?', [id_])
-
-                # conn.commit()
-                # conn.close()
 
                 break
 
@@ -290,9 +270,10 @@ class Select_project_GUI:
     def __init__(self):
         self.init_connection_to_server()
 
-        self.dir = r'C:\Users\hp\Desktop\Freeform project\projects (db)\\'
-        files = os.listdir(self.dir)
-        db_files = list(filter(self.is_db_file, files))
+        # self.dir = r'C:\Users\hp\Desktop\Freeform project\projects (db)\\'
+        self.client_socket.send(pickle.dumps(("get_projects_names", None)))
+        # files = pickle.loads(self.client_socket.recv(2048))
+        self.db_files = pickle.loads(self.client_socket.recv(2048))
         
         self.root = tk.Tk()
         self.root.geometry("400x400")
@@ -301,27 +282,24 @@ class Select_project_GUI:
 
         tk.Button(text = "START NEW PROJECT", command = self.new_project).pack(pady=20)
 
-        for f in db_files:
-            tk.Button(text = f, command = lambda name=f: self.open_project(name)).pack()
+        for file in self.db_files:
+            tk.Button(text = file, command = lambda name=file: self.open_project(name)).pack()
 
         self.root.mainloop()
 
-
-    def is_db_file(self, file):
-        return file[-3:] == ".db" #checks the last 3 characters in the string
 
     def open_project(self, file_name):
         self.root.destroy()
 
         # file = self.dir + file_name
-        self.client_socket.send(file_name.encode()) 
+        self.client_socket.send(pickle.dumps(("set_project_name", file_name))) 
 
         Canvas_GUI(self.client_socket, file_name, True)
 
     def new_project(self):
         self.root.destroy()
         
-        New_project_GUI(self.client_socket)
+        New_project_GUI(self.client_socket, self.db_files)
     
     def init_connection_to_server(self):
         self.client_socket = socket.socket()
@@ -338,10 +316,11 @@ class Select_project_GUI:
 
 
 class New_project_GUI:
-    def __init__(self, client_socket):
+    def __init__(self, client_socket, db_files):
         self.client_socket = client_socket
+        self.db_files = db_files
 
-        self.dir = r'C:\Users\hp\Desktop\Freeform project\projects (db)\\'
+        # self.dir = r'C:\Users\hp\Desktop\Freeform project\projects (db)\\'
         self.root = tk.Tk()
         self.root.geometry("400x400")
         self.root.title("Start new project")
@@ -353,9 +332,9 @@ class New_project_GUI:
 
     def button_pressed(self):
         name = self.entry.get() + ".db"
-        if(name not in os.listdir(self.dir)):
+        if(name not in self.db_files):
             self.root.destroy()
-            self.client_socket.send(name.encode()) 
+            self.client_socket.send(pickle.dumps(("set_project_name", name))) 
             Canvas_GUI(self.client_socket, name, False)
         else:
             tk.Label(text="NAME ALREADY TAKEN, PLEASE TRY AGAIN").pack()
