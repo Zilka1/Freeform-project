@@ -5,14 +5,15 @@ import tkinter as tk
 import socket
 import threading
 import pickle
+from pathlib import Path
 import queue
 # import time
 
 class Canvas_GUI:
     def __init__(self, client_socket, file_name, exists = False):
-        self.dir = r'C:\Users\hp\Desktop\Freeform project\projects (db)\\'
-        self.file_name = file_name
-        self.full_path = self.dir + self.file_name
+        # self.dir = r'C:\Users\hp\Desktop\Freeform project\projects (db)\\'
+        # self.file_name = file_name
+        # self.full_path = self.dir + self.file_name
 
         self.client_socket = client_socket
 
@@ -283,7 +284,7 @@ class Select_project_GUI:
         tk.Button(text = "START NEW PROJECT", command = self.new_project).pack(pady=20)
 
         for file in self.db_files:
-            tk.Button(text = file, command = lambda name=file: self.open_project(name)).pack()
+            tk.Button(text = file.stem, command = lambda name=file: self.open_project(name)).pack()
 
         self.root.mainloop()
 

@@ -14,6 +14,7 @@
 
 from drawing import Drawing
 import socket
+from pathlib import Path
 import threading
 import pickle
 import sqlite3
@@ -22,7 +23,7 @@ import time
 
 class Client:
     def __init__(self, socket, address, project=None): #needs project parameter
-        self.dir = r'C:\Users\hp\Desktop\Freeform project\projects (db)\\'
+        self.dir = Path(r'C:\Users\hp\Desktop\Freeform project\projects (db)')
         
         self.socket = socket
         self.address = address
@@ -36,7 +37,7 @@ class Client:
 
     def set_project(self, project_name):
         self.project = project_name
-        self.path = self.dir + self.project
+        self.path = self.dir.joinpath(self.project)
 
 # Example usage:
 # client = Client(socket, address)
@@ -266,10 +267,10 @@ class Server:
         conn.close()
 
     def is_db_file(self, file):
-        return file[-3:] == ".db" #checks the last 3 characters in the string
+        return file.suffix == ".db" #checks the last 3 characters in the string
 
     def get_projects_names(self, client):
-        files = os.listdir(client.dir)
+        files = Path.iterdir(client.dir)
         db_files = list(filter(self.is_db_file, files))
         
         client.socket.send(pickle.dumps(db_files))
