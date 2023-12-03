@@ -30,12 +30,15 @@ class Client:
         self.project = project
 
     def print_connection(self):
+        """Prints the client connection details."""
         print(f'Client connected: {self.address[0]}:{self.address[1]}')
     
     def close(self):
+        '''Closes the client connection.'''
         socket.close()
 
     def set_project(self, project_name):
+        '''Assigns a project to the client'''
         self.project = project_name
         self.path = self.dir.joinpath(self.project)
 
@@ -48,6 +51,7 @@ class Client:
         
 class Server:
     def __init__(self):
+        """Initializes the Server object and starts listening for client connections."""
         self.client_list = []
 
         server_socket = socket.socket()
@@ -79,6 +83,7 @@ class Server:
     
     
     def handle_client(self, client):
+        '''Handles a single client connection.'''
         while True:
             try:
                 # data = b'' + client.socket.recv(1024)
@@ -136,6 +141,7 @@ class Server:
 
 
     def new_line(self, client, d): # d - Drawing object
+        """Updates the database with a new drawing and sends it to other clients."""
         # Update DB
         conn = sqlite3.connect(client.path)
         c = conn.cursor()
@@ -154,6 +160,7 @@ class Server:
         
 
     def delete_line(self, client, id_):
+        """Deletes a drawing from the database and sends a delete message to other clients."""
         # Delete from db
         conn = sqlite3.connect(client.path)
         c = conn.cursor()
@@ -167,48 +174,8 @@ class Server:
                 c.socket.send(pickle.dumps(("delete", id_)))
 
 
-    # def get_id_from_db(self, client):
-    #     conn = sqlite3.connect(client.path)
-    #     c = conn.cursor()
-
-    #     c.execute('SELECT * FROM variables')
-
-    #     id_ = c.fetchall()[0][1]
-
-
-    #     c.close()
-    #     conn.close()
-
-    #     # client.socket.send(str(id_).encode())
-
-    #     return id_
-
-
-    #     # print(id_)
-    #     # return id_
-    
-    # def inc_id(self, client):
-    #     cur_id = self.get_id_from_db(client)
-
-    #     print(cur_id)
-
-    #     conn = sqlite3.connect(client.path)
-    #     c = conn.cursor()
-
-    #     inc_cmd = '''
-    #         UPDATE variables
-    #         SET value = ? '''
-        
-    #     c.execute(inc_cmd, (cur_id+1,))
-    #     conn.commit()
-
-    #     c.close()
-    #     conn.close()
-
-    # def send_id(self, client):
-    #     client.socket.send(str(self.get_id_from_db(client)).encode())
-
     def get_and_inc_id(self, client):
+        """Gets the current ID from the database, sends it to the client, and increments the ID."""
         conn = sqlite3.connect(client.path)
         c = conn.cursor()
 
@@ -234,6 +201,7 @@ class Server:
     
 
     def create_new_db(self, client):
+        '''Initializes a new database'''
         conn = sqlite3.connect(client.path)
         c = conn.cursor()
 
@@ -245,6 +213,7 @@ class Server:
         conn.close()
     
     def load_canvas_sql(self, client):
+        """Gets the current ID from the database, sends it to the client, and increments the ID."""
         conn = sqlite3.connect(client.path)
         c = conn.cursor()
 
@@ -266,13 +235,16 @@ class Server:
 
         conn.close()
 
-    def is_db_file(self, file):
-        return file.suffix == ".db" #checks the last 3 characters in the string
+    # def is_db_file(self, file):
+    #     return file.suffix == ".db" #checks the last 3 characters in the string
 
     def get_projects_names(self, client):
-        files = Path.iterdir(client.dir)
-        db_files = list(filter(self.is_db_file, files))
+        """Gets a list of project names from the directory and sends it to the client."""
         
+        files = Path.iterdir(client.dir)
+        # db_files = list(filter(self.is_db_file, files))
+        db_files = [file for file in files if file.suffix == ".db"] # Filter the db files
+
         client.socket.send(pickle.dumps(db_files))
 
 if __name__ == "__main__":

@@ -11,14 +11,16 @@ class Drawing:
     
     def add_point(self, point):
         '''
-        recives a point as a tuple and the id of the point in the tk canvas and adds then to their lists
+        Recives a point as a tuple adds it to its list
         '''
         self.pt_list.append(point)
 
     def add_id(self, id):
+        '''Receives an id and adds it to the list of ids'''
         self.id_list.append(id)
     
     def draw_oval(self, canvas, point):
+        """Draws an oval with in given point"""
         x, y = point
         circle_off = self.width/2 - 1 #offset, got to be slightly lower than width/2 so it wont buldge out
         c_x1, c_y1 = (x - circle_off), (y - circle_off)
@@ -27,6 +29,7 @@ class Drawing:
         self.id_list.append(id)
     
     def delete_from_canvas(self, canvas):
+        '''Deletes the entire drawing from the canvas.'''
         for id_ in self.id_list:
             canvas.delete(id_)
         
@@ -50,8 +53,3 @@ class Drawing:
         if (self.width > 3): # otherwise it looks weird
             self.draw_oval(canvas, self.pt_list[0])
             self.draw_oval(canvas, self.pt_list[-1])
-
-
-if __name__ == "__main__":
-    d = Drawing()
-    d.add_point_and_id((5,3))

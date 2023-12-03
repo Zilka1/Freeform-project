@@ -76,7 +76,7 @@ class Canvas_GUI:
         self.receive_lock = threading.Lock()
 
         if(exists):
-            self.load_canvas_sql()
+            self.load_canvas()
         else:
             self.create_new_db()
 
@@ -89,6 +89,10 @@ class Canvas_GUI:
 
 
     def start_drawing(self, event):
+        '''
+            Initializes a new drawing and creates an oval shape at the starting position of the mouse cursor.
+        '''
+
         width = int(self.line_width_entry.get())
 
         self.deleted_drawings = [] # Clears the redo option
@@ -107,6 +111,10 @@ class Canvas_GUI:
 
 
     def draw(self, event):
+        '''
+        Creates a line between the previous and current position of the mouse cursor.
+        '''
+
         self.move_target(event) # Deals with a bug where the target would update if the mouse i pressed
 
         width = int(self.line_width_entry.get())
@@ -125,7 +133,10 @@ class Canvas_GUI:
 
         self.cur_drawing.add_point((x,y))
 
-    def end_drawing(self, *args): #*args to deal with event
+    def end_drawing(self, *_): #*_ to deal with event
+        '''
+            Assigns an ID to the current drawing, adds it to the list of drawings and sends it to the server.
+        '''
         cur_id = self.get_and_inc_id()
         print("id:", cur_id)
         self.cur_drawing.id = cur_id
@@ -133,11 +144,17 @@ class Canvas_GUI:
         self.drawings.append(self.cur_drawing)
         self.send_new_drawing(self.cur_drawing)        
 
-    def hide_target(self, *args): #*args to deal with event
+    def hide_target(self, *_): #*_ to deal with event
+        '''
+            Hides the target shape indicating the area to be painted. (used when the mouse leaves the canvas)
+        '''
         self.canvas.delete(self.target)
         self.target = -1
 
     def move_target(self, event):
+        '''
+            Updates the position of the target shape to follow the mouse cursor.
+        '''
         if(self.target != -1):
             self.canvas.delete(self.target)
         circle_off = max(5/2, int(self.line_width_entry.get())/2)
@@ -147,9 +164,15 @@ class Canvas_GUI:
         self.target = self.canvas.create_oval(x1, y1, x2, y2, fill="", outline=self.color) # shows the outline of the area you'd paint
 
     def set_color(self, color):
+        '''
+            Sets the color variable to the selected color.
+        '''
         self.color = color
 
-    def delete_last_drawing(self, *args): #*args to deal with event if given   
+    def delete_last_drawing(self, *_): #*_ to deal with event if given   
+        '''
+            Removes the last drawing from the list of drawings, deletes it from the canvas, and sends a delete msg to the server.
+        '''
         if self.drawings:
             d = self.drawings.pop()
             d.delete_from_canvas(self.canvas)
@@ -162,7 +185,10 @@ class Canvas_GUI:
 
             self.client_socket.send(pickle.dumps(("delete", id_)))
               
-    def redo_last_deleted_drawing(self, *args): #*args to deal with event if given
+    def redo_last_deleted_drawing(self, *_): #*_ to deal with event if given
+        '''
+            Restores the last deleted drawing from the list of deleted drawings and redraws it on the canvas.
+        '''
         if self.deleted_drawings:
             d = self.deleted_drawings.pop()
             self.drawings.append(d)
@@ -176,7 +202,10 @@ class Canvas_GUI:
         return value == "" or (value.isnumeric() and int(value) <= 45)
 
 
-    def load_canvas_sql(self):
+    def load_canvas(self):
+        '''
+            Loads drawings from the database and adds them to the canvas.
+        '''
         self.client_socket.send(pickle.dumps(("load_canvas", None)))
         
         with self.receive_lock:
@@ -195,10 +224,14 @@ class Canvas_GUI:
 
 
     def create_new_db(self):
+        '''
+            Creates a new database for the canvas.
+        '''
         self.client_socket.send(pickle.dumps(("create_new_db", None)))
 
 
     def receive_data(self, client_socket):
+        '''Receives and processes data from the server.'''
         while self.window_open:
             try:
                 # Set a timeout for the socket operation so it will know if the window is closed
@@ -218,7 +251,7 @@ class Canvas_GUI:
                 print("content:", content)
 
                 if action == "new_line":
-                    self.new_line(content)
+                    self.add_to_drawings(content)
                 elif action == "delete":
                     self.delete_line(content) 
 
@@ -230,6 +263,7 @@ class Canvas_GUI:
 
 
     def send_new_drawing(self, d): # d - Drawing object
+        '''Sends a new drawing to the server.'''
         # Define the data to be sent
         data = pickle.dumps(("new_line", d))
         print(d)
@@ -237,12 +271,14 @@ class Canvas_GUI:
         # self.client_socket.sendall("hello my name is jeff im trying to make this string longer but its kinda hard to write a lot so im just writing bullshit until it gets past the chunk size did it get past the chunk size already who knows lets check".encode())
 
 
-    def new_line(self, drawing):
+    def add_to_drawings(self, drawing):
+        '''Adds a new drawing to the list of drawings and draws it on the canvas.'''
         self.drawings.append(drawing)
         drawing.draw_drawing(self.canvas)
 
 
     def delete_line(self, id_, is_this_user = False):
+        '''Removes a drawing from the list of drawings and deletes it.'''
         for d in self.drawings:
             if d.id == id_:
                 self.drawings.remove(d)
@@ -254,6 +290,7 @@ class Canvas_GUI:
                 break
 
     def get_and_inc_id(self):
+        '''Gets the current ID from the server and increments it.'''
         with self.receive_lock:
             self.client_socket.send(pickle.dumps(("get_and_inc_id", None)))
             id_ = int(self.client_socket.recv(1024).decode())
@@ -332,6 +369,7 @@ class New_project_GUI:
 
 
     def button_pressed(self):
+        '''Opens an existing project by setting the project name and creating a new Canvas_GUI.'''
         name = self.entry.get() + ".db"
         if(name not in self.db_files):
             self.root.destroy()
