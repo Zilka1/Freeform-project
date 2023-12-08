@@ -31,7 +31,7 @@ class Client:
 
     def print_connection(self):
         """Prints the client connection details."""
-        print(f'Client connected: {self.address[0]}:{self.address[1]}')
+        print(f'Client connected to main server: {self.address[0]}:{self.address[1]}')
     
     def close(self):
         '''Closes the client connection.'''
@@ -49,7 +49,7 @@ class Client:
     
 
         
-class Server:
+class MainServer:
     def __init__(self):
         """Initializes the Server object and starts listening for client connections."""
         self.client_list = []
@@ -61,7 +61,7 @@ class Server:
         
         server_socket.listen(100)
         
-        print(f'Server started. Listening on {server_address[0]}:{server_address[1]}')
+        print(f'Main server started. Listening on {server_address[0]}:{server_address[1]}')
         
 
         # Handle new connections
@@ -110,8 +110,8 @@ class Server:
                     self.new_line(client, content)
                 elif action.split()[0] == "delete":
                     self.delete_line(client, content) #client, id
-                elif action == "get_and_inc_id":
-                    self.get_and_inc_id(client)
+                # elif action == "get_and_inc_id":
+                #     self.get_and_inc_id(client)
                 elif action == "create_new_db":
                     self.create_new_db(client)
                 elif action == "load_canvas":
@@ -174,31 +174,7 @@ class Server:
                 c.socket.send(pickle.dumps(("delete", id_)))
 
 
-    def get_and_inc_id(self, client):
-        """Gets the current ID from the database, sends it to the client, and increments the ID."""
-        conn = sqlite3.connect(client.path)
-        c = conn.cursor()
 
-        c.execute('SELECT * FROM variables')
-
-        id_ = c.fetchall()[0][1]
-
-        print(id_)
-
-        client.socket.send(str(id_).encode())
-
-        inc_cmd = '''
-            UPDATE variables
-            SET value = ? '''
-        
-        c.execute(inc_cmd, (id_+1,))
-        conn.commit()
-        conn.close()
-
-        
-
-        # return id_
-    
 
     def create_new_db(self, client):
         '''Initializes a new database'''
@@ -247,6 +223,84 @@ class Server:
 
         client.socket.send(pickle.dumps(db_files))
 
+
+
+
+
+
+
+
+class CommandServer():
+    def __init__(self):
+        """Initializes the Server object and starts listening for client connections."""
+        self.client_list = []
+
+        server_socket = socket.socket()
+        
+        server_address = ("0.0.0.0", 1730)
+        server_socket.bind(server_address)
+        
+        server_socket.listen(100)
+        
+        print(f'Command server started. Listening on {server_address[0]}:{server_address[1]}')
+        
+
+        # Handle new connections
+        while True:
+            # Accept a client connection
+            client_socket, client_address = server_socket.accept()
+
+            print(f'Client connected to command server: {client_address[0]}:{client_address[1]}')
+
+            
+            # project_path = client_socket.recv(1024).decode()
+
+            # dir = Path(r'C:\Users\hp\Desktop\Freeform project\projects (db)')
+            
+            # project_path = dir.joinpath(project_name)
+
+            # print("set project:", project_path)
+
+            # Create a new thread to handle the client
+            client_thread = threading.Thread(target=self.handle_client, args=(client_socket,))
+            client_thread.start()
+        
+
+    def handle_client(self, client_socket):
+        '''Handles a single client connection.'''
+        project_path = client_socket.recv(1024).decode()
+        print("COMMAND SERVER:", project_path)
+        while True:
+            action, content = pickle.loads(client_socket.recv(1024))
+            print(f"COMMAND SERVER: action: {action}, content: {content}")
+            if action == "get_and_inc_id":
+                self.get_and_inc_id(client_socket, project_path)
+
+    
+    def get_and_inc_id(self, client_socket, project_path):
+        """Gets the current ID from the database, sends it to the client, and increments the ID."""
+        conn = sqlite3.connect(project_path)
+        c = conn.cursor()
+
+        c.execute('SELECT * FROM variables')
+
+        id_ = c.fetchall()[0][1]
+
+        print(id_)
+
+        client_socket.send(str(id_).encode())
+
+        inc_cmd = '''
+            UPDATE variables
+            SET value = ? '''
+        
+        c.execute(inc_cmd, (id_+1,))
+        conn.commit()
+        conn.close()
+    
+    
+
 if __name__ == "__main__":
     # Start the server
-    Server()
+    threading.Thread(target=lambda: MainServer()).start()
+    threading.Thread(target=lambda: CommandServer()).start()

@@ -6,16 +6,17 @@ import socket
 import threading
 import pickle
 from pathlib import Path
-import queue
+# import queue
 # import time
 
-class Canvas_GUI:
-    def __init__(self, client_socket, file_name, exists = False):
+class CanvasGUI:
+    def __init__(self, client_socket, command_client_socket, file_name, exists = False):
         # self.dir = r'C:\Users\hp\Desktop\Freeform project\projects (db)\\'
         # self.file_name = file_name
         # self.full_path = self.dir + self.file_name
 
         self.client_socket = client_socket
+        self.command_client_socket = command_client_socket
 
         self.drawings = []
         self.deleted_drawings = []
@@ -235,7 +236,7 @@ class Canvas_GUI:
         while self.window_open:
             try:
                 # Set a timeout for the socket operation so it will know if the window is closed
-                client_socket.settimeout(0.05)  # 0.1 second
+                client_socket.settimeout(0.5)  # 0.1 second
                 
                 with self.receive_lock:
                     CHUNK_SIZE = 1024
@@ -291,9 +292,8 @@ class Canvas_GUI:
 
     def get_and_inc_id(self):
         '''Gets the current ID from the server and increments it.'''
-        with self.receive_lock:
-            self.client_socket.send(pickle.dumps(("get_and_inc_id", None)))
-            id_ = int(self.client_socket.recv(1024).decode())
+        self.command_client_socket.send(pickle.dumps(("get_and_inc_id", None)))
+        id_ = int(self.command_client_socket.recv(1024).decode())
 
         print("id from server", id_)
 
@@ -304,7 +304,7 @@ class Canvas_GUI:
 
 
 
-class Select_project_GUI:
+class SelectProjectGUI:
     def __init__(self):
         self.init_connection_to_server()
 
@@ -326,24 +326,31 @@ class Select_project_GUI:
         self.root.mainloop()
 
 
-    def open_project(self, file_name):
+    def open_project(self, path):
         self.root.destroy()
 
         # file = self.dir + file_name
-        self.client_socket.send(pickle.dumps(("set_project_name", file_name))) 
+        self.client_socket.send(pickle.dumps(("set_project_name", path)))
+        self.command_client_socket.send(path.__str__().encode())
+        print(path.__str__())
 
-        Canvas_GUI(self.client_socket, file_name, True)
+        CanvasGUI(self.client_socket, self.command_client_socket, path, True)
 
     def new_project(self):
         self.root.destroy()
         
-        New_project_GUI(self.client_socket, self.db_files)
+        NewProjectGUI(self.client_socket, self.command_client_socket, self.db_files)
     
     def init_connection_to_server(self):
-        self.client_socket = socket.socket()
-        
-        server_address = ('localhost', 1729)
+        hostname = 'localhost'
+
+        self.client_socket = socket.socket()        
+        server_address = (hostname, 1729)
         self.client_socket.connect(server_address)
+        
+        self.command_client_socket = socket.socket()
+        command_server_address = (hostname, 1730)
+        self.command_client_socket.connect(command_server_address)
 
         print(f'Connected to server {server_address[0]}:{server_address[1]}')
 
@@ -353,9 +360,10 @@ class Select_project_GUI:
 
 
 
-class New_project_GUI:
-    def __init__(self, client_socket, db_files):
+class NewProjectGUI:
+    def __init__(self, client_socket, command_client_socket, db_files):
         self.client_socket = client_socket
+        self.command_client_socket = command_client_socket
         self.db_files = db_files
 
         # self.dir = r'C:\Users\hp\Desktop\Freeform project\projects (db)\\'
@@ -373,8 +381,9 @@ class New_project_GUI:
         name = self.entry.get() + ".db"
         if(name not in self.db_files):
             self.root.destroy()
-            self.client_socket.send(pickle.dumps(("set_project_name", name))) 
-            Canvas_GUI(self.client_socket, name, False)
+            self.client_socket.send(pickle.dumps(("set_project_name", name)))
+            self.command_client_socket.send(name.__str__().encode())
+            CanvasGUI(self.client_socket, self.command_client_socket, name, False)
         else:
             tk.Label(text="NAME ALREADY TAKEN, PLEASE TRY AGAIN").pack()
 
@@ -410,6 +419,6 @@ class New_project_GUI:
 
 
 if __name__ == "__main__":
-    Select_project_GUI()
+    SelectProjectGUI()
 
 # gui = Canvas_GUI("drawings.db", True)
