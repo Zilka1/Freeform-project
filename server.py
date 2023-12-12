@@ -76,46 +76,50 @@ class MainServer:
     def handle_client(self, client):
         '''Handles a single client connection.'''
         while True:
-            try:
+            # try:
                 # data = b'' + client.socket.recv(1024)
 
-                data = SocketHelper.recv_msg(client.socket)
-                
-                action, content = pickle.loads(data)
+            data = SocketHelper.recv_msg(client.socket)
+            
+            if data is None:
+                break
+
+            action, content = pickle.loads(data)
 
 
-                print("action:", action)
-                print("content:", content)
+            print(f'Client {client.address[0]}:{client.address[1]}: action: {action}, content: {content}')
 
-                if action == "set_project_name":
-                    client.set_project(content)
-                elif action == "get_projects_names":
-                    self.get_projects_names(client)
-                elif action == "new_line":
-                    self.new_line(client, content)
-                elif action == "delete":
-                    self.delete_line(client, content) #client, id
-                # elif action == "get_and_inc_id":
-                #     self.get_and_inc_id(client)
-                elif action == "create_new_db":
-                    self.create_new_db(client)
-                elif action == "load_canvas":
-                    self.load_canvas_sql(client)
+            if action == "set_project_name":
+                client.set_project(content)
+            elif action == "get_projects_names":
+                self.get_projects_names(client)
+            elif action == "new_line":
+                self.new_line(client, content)
+            elif action == "delete":
+                self.delete_line(client, content) #client, id
+            # elif action == "get_and_inc_id":
+            #     self.get_and_inc_id(client)
+            elif action == "create_new_db":
+                self.create_new_db(client)
+            elif action == "load_canvas":
+                self.load_canvas_sql(client)
 
                 # elif action == "get_id":
                 #     self.send_id(client)
                 # elif action == "inc_id":
                 #     self.inc_id(client)
                 
+            # except ConnectionResetError:
+            #     break
                 
-                
-            except Exception as e:
-                # ... PRINT THE ERROR MESSAGE ... #
-                print(e)
-                print("couldnt get data from client")
-                break
+            # except Exception as e:
+            #     # ... PRINT THE ERROR MESSAGE ... #
+            #     print(e)
+            #     # print("couldnt get data from client")
+            #     break
         
         # Close the client socket
+        print(f"Client disconnected: {client.address[0]}:{client.address[1]}")
         client.socket.close()
         self.client_list.remove(client)
 
@@ -156,7 +160,6 @@ class MainServer:
 
         for c in self.client_list:
             if (c != client and c.project == client.project):
-                print("sending delete message to client", client.address)
                 SocketHelper.send_msg(c.socket, pickle.dumps(("delete", id_)))
 
 
@@ -167,7 +170,7 @@ class MainServer:
         conn = sqlite3.connect(client.path)
         c = conn.cursor()
 
-        c.execute('CREATE TABLE drawings (id INTERGER, color TEXT, width INTEGER, pt_list TEXT)')
+        c.execute('CREATE TABLE drawings (id INTERGER PRIMARY KEY, color TEXT, width INTEGER, pt_list TEXT)')
         c.execute('CREATE TABLE variables (name TEXT, value INTEGER)')
         c.execute('INSERT INTO variables VALUES (?, ?)', ("id", 0))
 
@@ -218,7 +221,7 @@ class MainServer:
 class CommandServer():
     def __init__(self):
         """Initializes the Server object and starts listening for client connections."""
-        self.client_list = []
+        # self.client_list = []
 
         server_socket = socket.socket()
         
@@ -253,18 +256,34 @@ class CommandServer():
 
     def handle_client(self, client_socket):
         '''Handles a single client connection.'''
-        project_path = client_socket.recv(1024).decode()
+        data = SocketHelper.recv_msg(client_socket)
+        if data is None:
+            client_socket.close()
+            return
+        
+        dir = Path(r'C:\Users\hp\Desktop\Freeform project\projects (db)')
+        project_name = data.decode()
+        project_path = dir.joinpath(project_name)
+
         print("COMMAND SERVER:", project_path)
         while True:
-            action, content = pickle.loads(client_socket.recv(1024))
+            data = SocketHelper.recv_msg(client_socket)
+            if data is None:
+                break
+
+            action, content = pickle.loads(data)
             print(f"COMMAND SERVER: action: {action}, content: {content}")
             
             if action == "get_and_inc_id":
                 self.get_and_inc_id(client_socket, project_path)
+        
+        client_socket.close()
+        # self.client_list.remove(client_socket)
 
     
     def get_and_inc_id(self, client_socket, project_path):
         """Gets the current ID from the database, sends it to the client, and increments the ID."""
+        print(project_path)
         conn = sqlite3.connect(project_path)
         c = conn.cursor()
 
@@ -272,9 +291,9 @@ class CommandServer():
 
         id_ = c.fetchall()[0][1]
 
-        print(id_)
+        # print(id_)
 
-        client_socket.send(str(id_).encode())
+        SocketHelper.send_msg(client_socket, str(id_).encode())
 
         inc_cmd = '''
             UPDATE variables

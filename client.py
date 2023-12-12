@@ -89,6 +89,9 @@ class CanvasGUI:
         self.root.mainloop()
 
         self.window_open = False # Used to cut the connection when the user closes the window
+        print("windows closed")
+        
+        receive_thread.join()
 
 
     def start_drawing(self, event):
@@ -238,8 +241,7 @@ class CanvasGUI:
                     data = SocketHelper.recv_msg(client_socket)
                 
                 action, content = pickle.loads(data)
-                print("action:", action)
-                print("content:", content)
+                print(f'action: {action}, content: {content}')
 
                 if action == "new_line":
                     self.add_to_drawings(content)
@@ -273,7 +275,7 @@ class CanvasGUI:
         for d in self.drawings:
             if d.id == id_:
                 self.drawings.remove(d)
-                d.delete_from_canvas(self.canvas)
+                self.root.after(0, d.delete_from_canvas(self.canvas))
 
                 if is_this_user: #Only append drawing if it was deleted by this user
                     self.deleted_drawings.append(d)
@@ -282,8 +284,8 @@ class CanvasGUI:
 
     def get_and_inc_id(self):
         '''Gets the current ID from the server and increments it.'''
-        self.command_client_socket.send(pickle.dumps(("get_and_inc_id", None)))
-        id_ = int(self.command_client_socket.recv(1024).decode())
+        SocketHelper.send_msg(self.command_client_socket, pickle.dumps(("get_and_inc_id", None)))
+        id_ = int(SocketHelper.recv_msg(self.command_client_socket).decode())
 
         print("id from server", id_)
 
@@ -321,7 +323,7 @@ class SelectProjectGUI:
 
         # file = self.dir + file_name
         SocketHelper.send_msg(self.client_socket, pickle.dumps(("set_project_name", path)))
-        self.command_client_socket.send(path.__str__().encode())
+        SocketHelper.send_msg(self.command_client_socket, path.__str__().encode())
         print(path.__str__())
 
         CanvasGUI(self.client_socket, self.command_client_socket, path, True)
@@ -372,7 +374,7 @@ class NewProjectGUI:
         if(name not in self.db_files):
             self.root.destroy()
             SocketHelper.send_msg(self.client_socket, pickle.dumps(("set_project_name", name)))
-            self.command_client_socket.send(name.__str__().encode())
+            SocketHelper.send_msg(self.command_client_socket, name.__str__().encode())
             CanvasGUI(self.client_socket, self.command_client_socket, name, False)
         else:
             tk.Label(text="NAME ALREADY TAKEN, PLEASE TRY AGAIN").pack()

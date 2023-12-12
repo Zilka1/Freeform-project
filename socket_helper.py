@@ -18,11 +18,14 @@ class SocketHelper:
 
     def recvall(socket, n):
         # Helper function to recv n bytes or return None if EOF is hit
-        data = bytearray()
-        while len(data) < n:
-            packet = socket.recv(n - len(data))
-            # print(pickle.loads(packet))
-            if not packet:
-                return None
-            data.extend(packet)
-        return data
+        try:
+            data = bytearray()
+            while len(data) < n:
+                packet = socket.recv(n - len(data))
+                # print(pickle.loads(packet))
+                if not packet:
+                    return None
+                data.extend(packet)
+            return data
+        except ConnectionResetError:
+            return None
