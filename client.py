@@ -1,13 +1,15 @@
 from drawing import Drawing
+from socket_helper import SocketHelper
 import tkinter as tk
 # import sqlite3
 # import os
 import socket
 import threading
 import pickle
-from pathlib import Path
+# from pathlib import Path
 # import queue
 # import time
+# import struct
 
 class CanvasGUI:
     def __init__(self, client_socket, command_client_socket, file_name, exists = False):
@@ -184,7 +186,7 @@ class CanvasGUI:
             
             print("id", id_)
 
-            self.client_socket.send(pickle.dumps(("delete", id_)))
+            SocketHelper.send_msg(self.client_socket, pickle.dumps(("delete", id_)))
               
     def redo_last_deleted_drawing(self, *_): #*_ to deal with event if given
         '''
@@ -207,16 +209,10 @@ class CanvasGUI:
         '''
             Loads drawings from the database and adds them to the canvas.
         '''
-        self.client_socket.send(pickle.dumps(("load_canvas", None)))
+        SocketHelper.send_msg(self.client_socket, pickle.dumps(("load_canvas", None)))
         
         with self.receive_lock:
-            CHUNK_SIZE = 1024
-            data = b''
-            while True:
-                chunk = self.client_socket.recv(CHUNK_SIZE)
-                data += chunk
-                if len(chunk) < CHUNK_SIZE:
-                    break
+            data = SocketHelper.recv_msg(self.client_socket)
 
         drawings = pickle.loads(data)
         for d in drawings:
@@ -228,7 +224,7 @@ class CanvasGUI:
         '''
             Creates a new database for the canvas.
         '''
-        self.client_socket.send(pickle.dumps(("create_new_db", None)))
+        SocketHelper.send_msg(self.client_socket, pickle.dumps(("create_new_db", None)))
 
 
     def receive_data(self, client_socket):
@@ -239,13 +235,7 @@ class CanvasGUI:
                 client_socket.settimeout(0.5)  # 0.1 second
                 
                 with self.receive_lock:
-                    CHUNK_SIZE = 1024
-                    data = b''
-                    while True:
-                        chunk = client_socket.recv(CHUNK_SIZE)
-                        data += chunk
-                        if len(chunk) < CHUNK_SIZE:
-                            break
+                    data = SocketHelper.recv_msg(client_socket)
                 
                 action, content = pickle.loads(data)
                 print("action:", action)
@@ -268,14 +258,14 @@ class CanvasGUI:
         # Define the data to be sent
         data = pickle.dumps(("new_line", d))
         print(d)
-        self.client_socket.sendall(data)
+        SocketHelper.send_msg(self.client_socket, data)
         # self.client_socket.sendall("hello my name is jeff im trying to make this string longer but its kinda hard to write a lot so im just writing bullshit until it gets past the chunk size did it get past the chunk size already who knows lets check".encode())
 
 
     def add_to_drawings(self, drawing):
         '''Adds a new drawing to the list of drawings and draws it on the canvas.'''
         self.drawings.append(drawing)
-        drawing.draw_drawing(self.canvas)
+        self.root.after(0, lambda:drawing.draw_drawing(self.canvas))
 
 
     def delete_line(self, id_, is_this_user = False):
@@ -298,7 +288,7 @@ class CanvasGUI:
         print("id from server", id_)
 
         return id_
-
+    
 
 
 
@@ -309,9 +299,9 @@ class SelectProjectGUI:
         self.init_connection_to_server()
 
         # self.dir = r'C:\Users\hp\Desktop\Freeform project\projects (db)\\'
-        self.client_socket.send(pickle.dumps(("get_projects_names", None)))
+        SocketHelper.send_msg(self.client_socket, pickle.dumps(("get_projects_names", None)))
         # files = pickle.loads(self.client_socket.recv(2048))
-        self.db_files = pickle.loads(self.client_socket.recv(2048))
+        self.db_files = pickle.loads(SocketHelper.recv_msg(self.client_socket))
         
         self.root = tk.Tk()
         self.root.geometry("400x400")
@@ -330,7 +320,7 @@ class SelectProjectGUI:
         self.root.destroy()
 
         # file = self.dir + file_name
-        self.client_socket.send(pickle.dumps(("set_project_name", path)))
+        SocketHelper.send_msg(self.client_socket, pickle.dumps(("set_project_name", path)))
         self.command_client_socket.send(path.__str__().encode())
         print(path.__str__())
 
@@ -381,7 +371,7 @@ class NewProjectGUI:
         name = self.entry.get() + ".db"
         if(name not in self.db_files):
             self.root.destroy()
-            self.client_socket.send(pickle.dumps(("set_project_name", name)))
+            SocketHelper.send_msg(self.client_socket, pickle.dumps(("set_project_name", name)))
             self.command_client_socket.send(name.__str__().encode())
             CanvasGUI(self.client_socket, self.command_client_socket, name, False)
         else:

@@ -46,9 +46,9 @@ class Drawing:
         
 
         flattened = [a for x in self.pt_list for a in x] # converts the list of tuples to a list of the format [x,y,x,y,x,y,...]
-        id = canvas.create_line(*flattened, width=self.width, fill=self.color)
+        id_ = canvas.create_line(*flattened, width=self.width, fill=self.color)
 
-        self.id_list.append(id)
+        self.id_list.append(id_)
 
         if (self.width > 3): # otherwise it looks weird
             self.draw_oval(canvas, self.pt_list[0])

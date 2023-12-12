@@ -1,25 +1,16 @@
-#Make a list of clients - DONE
-#When data is received, update the db and send the data to all clients beside the client that sent the data - DONE
-#Choose project to work on through the server
-#   Send the client only the names of the files, and when they choose a file send them all of it
-#Clients will not edit the db they receive, it's only for initalization - DONE*
-#Clients need to handle getting data from the server and implementing it - DONE
-#
-#Need to add IDs to the drawings in the db - DONE
-
-
 # Notes on some problems:
 # client checks if new project name is valid based on the list it got before
 # client receiving from server with threading lock can be problematic
 
 from drawing import Drawing
+from socket_helper import SocketHelper
 import socket
 from pathlib import Path
 import threading
 import pickle
 import sqlite3
-import os
-import time
+# import os
+# import time
 
 class Client:
     def __init__(self, socket, address, project=None): #needs project parameter
@@ -56,7 +47,7 @@ class MainServer:
 
         server_socket = socket.socket()
         
-        server_address = ("localhost", 1729)
+        server_address = ("0.0.0.0", 1729)
         server_socket.bind(server_address)
         
         server_socket.listen(100)
@@ -88,13 +79,7 @@ class MainServer:
             try:
                 # data = b'' + client.socket.recv(1024)
 
-                CHUNK_SIZE = 1024
-                data = b''
-                while True:
-                    chunk = client.socket.recv(CHUNK_SIZE)
-                    data += chunk
-                    if len(chunk) < CHUNK_SIZE:
-                        break
+                data = SocketHelper.recv_msg(client.socket)
                 
                 action, content = pickle.loads(data)
 
@@ -108,7 +93,7 @@ class MainServer:
                     self.get_projects_names(client)
                 elif action == "new_line":
                     self.new_line(client, content)
-                elif action.split()[0] == "delete":
+                elif action == "delete":
                     self.delete_line(client, content) #client, id
                 # elif action == "get_and_inc_id":
                 #     self.get_and_inc_id(client)
@@ -153,7 +138,7 @@ class MainServer:
         # Send to other clients
         for c in self.client_list:
             if (c != client and c.project == client.project):
-                c.socket.send(pickle.dumps(("new_line", d)))
+                SocketHelper.send_msg(c.socket, pickle.dumps(("new_line", d)))
 
 
 
@@ -171,7 +156,8 @@ class MainServer:
 
         for c in self.client_list:
             if (c != client and c.project == client.project):
-                c.socket.send(pickle.dumps(("delete", id_)))
+                print("sending delete message to client", client.address)
+                SocketHelper.send_msg(c.socket, pickle.dumps(("delete", id_)))
 
 
 
@@ -207,7 +193,7 @@ class MainServer:
             drawings.append(d)
 
 
-        client.socket.send(pickle.dumps(drawings))
+        SocketHelper.send_msg(client.socket, pickle.dumps(drawings))
 
         conn.close()
 
@@ -221,8 +207,7 @@ class MainServer:
         # db_files = list(filter(self.is_db_file, files))
         db_files = [file for file in files if file.suffix == ".db"] # Filter the db files
 
-        client.socket.send(pickle.dumps(db_files))
-
+        SocketHelper.send_msg(client.socket, pickle.dumps(db_files))
 
 
 
@@ -273,6 +258,7 @@ class CommandServer():
         while True:
             action, content = pickle.loads(client_socket.recv(1024))
             print(f"COMMAND SERVER: action: {action}, content: {content}")
+            
             if action == "get_and_inc_id":
                 self.get_and_inc_id(client_socket, project_path)
 
@@ -302,5 +288,7 @@ class CommandServer():
 
 if __name__ == "__main__":
     # Start the server
-    threading.Thread(target=lambda: MainServer()).start()
+    t1 = threading.Thread(target=lambda: MainServer())
+    t1.start()
     threading.Thread(target=lambda: CommandServer()).start()
+    t1.join()
