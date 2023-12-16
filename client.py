@@ -1,6 +1,7 @@
 from drawing import Drawing
 from socket_helper import SocketHelper
 import tkinter as tk
+from tkinter import colorchooser
 # import sqlite3
 # import os
 import socket
@@ -35,7 +36,7 @@ class CanvasGUI:
 
         self.canvas.bind("<ButtonPress-1>", self.start_drawing)
         self.canvas.bind("<B1-Motion>", self.draw)
-        self.canvas.bind("<ButtonRelease-1>", lambda e: threading.Thread(target=self.end_drawing).start())
+        self.canvas.bind("<ButtonRelease-1>", lambda _: threading.Thread(target=self.end_drawing).start())
         
         self.canvas.bind("<Motion>", self.move_target)
         self.canvas.bind("<Leave>", self.hide_target)
@@ -48,15 +49,18 @@ class CanvasGUI:
         self.colors_frame.pack()
 
         font = ("Arial", 18)
-        tk.Button(self.colors_frame, text="BLACK",font=font, command = lambda: self.set_color("BLACK")).grid(row = 0, column = 0)
-        tk.Button(self.colors_frame, text="BLUE",font=font, command = lambda: self.set_color("BLUE")).grid(row = 0, column = 1)
-        tk.Button(self.colors_frame, text="RED",font=font, command = lambda: self.set_color("RED")).grid(row = 0, column = 2)
-        tk.Button(self.colors_frame, text="ORANGE",font=font, command = lambda: self.set_color("ORANGE")).grid(row = 0, column = 3)
+        
+        self.pick_color_b = tk.Button(self.colors_frame, text="", command=self.pick_color, background=self.color, padx = 8)
+        self.pick_color_b.grid(row = 0, column = 0, padx = 5)
+        # tk.Button(self.colors_frame, text="BLACK",font=font, command = lambda: self.set_color("BLACK")).grid(row = 0, column = 1)
+        # tk.Button(self.colors_frame, text="BLUE",font=font, command = lambda: self.set_color("BLUE")).grid(row = 0, column = 2)
+        # tk.Button(self.colors_frame, text="RED",font=font, command = lambda: self.set_color("RED")).grid(row = 0, column = 3)
+        # tk.Button(self.colors_frame, text="ORANGE",font=font, command = lambda: self.set_color("ORANGE")).grid(row = 0, column = 4)
 
 
         vcmd = (self.root.register(self.width_entry_validation), "%P") #used to deal with validation in Tcl
         self.line_width_entry = tk.Entry(self.colors_frame, validate="all", validatecommand=vcmd, width=4, justify="center") # %P -> new value of entry box
-        self.line_width_entry.grid(row=0,column=4)
+        self.line_width_entry.grid(row=0,column=5)
         self.line_width_entry.insert(0, "10") # Sets starting width
 
         tk.Button(self.colors_frame, text="UNDO", font=font, command=self.delete_last_drawing).grid(row=0, column=6) # ↶
@@ -144,7 +148,6 @@ class CanvasGUI:
             Assigns an ID to the current drawing, adds it to the list of drawings and sends it to the server.
         '''
         cur_id = self.get_and_inc_id()
-        print("id:", cur_id)
         self.cur_drawing.id = cur_id
 
         self.drawings.append(self.cur_drawing)
@@ -287,10 +290,21 @@ class CanvasGUI:
         SocketHelper.send_msg(self.command_client_socket, pickle.dumps(("get_and_inc_id", None)))
         id_ = int(SocketHelper.recv_msg(self.command_client_socket).decode())
 
-        print("id from server", id_)
+        print("id from server:", id_)
 
         return id_
     
+    def pick_color(self):
+        # The first time the color picker is opened, the color picker will start with #50dca4, otherwise it will default to the last picked color
+        if self.color == "black":
+            color = colorchooser.askcolor(title="Select Color", initialcolor="#50dca4")
+        else:
+            color = colorchooser.askcolor(title="Select Color", initialcolor=self.color)
+
+        if color[1]:  # Check if a color was chosen
+            chosen_color = color[1]
+            self.color = chosen_color
+            self.pick_color_b.config(background=chosen_color)
 
 
 

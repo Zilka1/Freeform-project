@@ -287,9 +287,9 @@ class CommandServer():
         conn = sqlite3.connect(project_path)
         c = conn.cursor()
 
-        c.execute('SELECT * FROM variables')
+        c.execute('SELECT value FROM variables WHERE name = "id"')
 
-        id_ = c.fetchall()[0][1]
+        id_ = c.fetchone()[0]
 
         # print(id_)
 
@@ -297,7 +297,8 @@ class CommandServer():
 
         inc_cmd = '''
             UPDATE variables
-            SET value = ? '''
+            SET value = ?
+            WHERE name = "id"'''
         
         c.execute(inc_cmd, (id_+1,))
         conn.commit()
