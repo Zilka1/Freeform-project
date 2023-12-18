@@ -3,6 +3,7 @@
 # client receiving from server with threading lock can be problematic
 
 from drawing import Drawing
+from rect_oval import Rect, Oval
 from socket_helper import SocketHelper
 import socket
 from pathlib import Path
@@ -95,6 +96,10 @@ class MainServer:
                 self.get_projects_names(client)
             elif action == "new_line":
                 self.new_line(client, content)
+            elif action == "new_rect":
+                self.new_rect_oval(client, content, 'rect')
+            elif action == "new_oval":
+                self.new_rect_oval(client, content, 'oval')
             elif action == "delete":
                 self.delete_line(client, content) #client, id
             # elif action == "get_and_inc_id":
@@ -153,7 +158,11 @@ class MainServer:
         # Delete from db
         conn = sqlite3.connect(client.path)
         c = conn.cursor()
-        c.execute('DELETE FROM drawings WHERE id = ?', [id_])
+
+        # Delete from either table
+        c.execute('DELETE FROM drawings WHERE id = ?', (id_,))
+        c.execute('DELETE FROM rects WHERE id = ?', (id_,))
+        c.execute('DELETE FROM ovals WHERE id = ?', (id_,))
 
         conn.commit()
         conn.close()
@@ -171,6 +180,8 @@ class MainServer:
         c = conn.cursor()
 
         c.execute('CREATE TABLE drawings (id INTERGER PRIMARY KEY, color TEXT, width INTEGER, pt_list TEXT)')
+        c.execute('CREATE TABLE rects (id INTERGER PRIMARY KEY, color TEXT, width INTEGER, x1 INTEGER, y1 INTEGErr, x2 INTEGER, y2 INTEGER)')
+        c.execute('CREATE TABLE ovals (id INTERGER PRIMARY KEY, color TEXT, width INTEGER, x1 INTEGER, y1 INTEGErr, x2 INTEGER, y2 INTEGER)')
         c.execute('CREATE TABLE variables (name TEXT, value INTEGER)')
         c.execute('INSERT INTO variables VALUES (?, ?)', ("id", 0))
 
@@ -196,6 +207,34 @@ class MainServer:
             drawings.append(d)
 
 
+        c.execute('SELECT * FROM rects')
+
+        for row in c.fetchall():
+            id = row[0]
+            color = row[1]
+            width = row[2]
+            x1 = row[3]
+            y1 = row[4]
+            x2 = row[5]
+            y2 = row[6]
+            
+            r = Rect(color, width, x1, y1, x2, y2, id)
+            drawings.append(r)
+
+        c.execute('SELECT * FROM ovals')
+        for row in c.fetchall():
+            id = row[0]
+            color = row[1]
+            width = row[2]
+            x1 = row[3]
+            y1 = row[4]
+            x2 = row[5]
+            y2 = row[6]
+            
+            r = Oval(color, width, x1, y1, x2, y2, id)
+            drawings.append(r)
+
+        drawings.sort(key = lambda d: d.id)
         SocketHelper.send_msg(client.socket, pickle.dumps(drawings))
 
         conn.close()
@@ -212,8 +251,21 @@ class MainServer:
 
         SocketHelper.send_msg(client.socket, pickle.dumps(db_files))
 
+    def new_rect_oval(self, client, obj: Rect or Oval, type_):
+        """Updates the database with a new drawing and sends it to other clients."""
+        # Update DB
+        conn = sqlite3.connect(client.path)
+        c = conn.cursor()
+        
+        c.execute(f'INSERT INTO {type_}s VALUES (?,?,?,?,?,?,?)', (obj.id, obj.color, obj.width, obj.x1, obj.y1, obj.x2, obj.y2))
 
+        conn.commit()
+        conn.close()
 
+        # Send to other clients
+        for c in self.client_list:
+            if (c!= client and c.project == client.project):
+                SocketHelper.send_msg(c.socket, pickle.dumps((f"new_{type_}", obj)))
 
 
 

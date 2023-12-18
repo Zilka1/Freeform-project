@@ -1,4 +1,5 @@
 from drawing import Drawing
+from rect_oval import Rect, Oval
 from socket_helper import SocketHelper
 import tkinter as tk
 from tkinter import colorchooser
@@ -12,6 +13,8 @@ import pickle
 # import time
 # import struct
 
+
+
 class CanvasGUI:
     def __init__(self, client_socket, command_client_socket, file_name, exists = False):
         # self.dir = r'C:\Users\hp\Desktop\Freeform project\projects (db)\\'
@@ -24,9 +27,10 @@ class CanvasGUI:
         self.drawings = []
         self.deleted_drawings = []
 
-
+        self.mode = "drawing"
         self.color = "black"
         self.target = -1 #setup for target
+        self.show_target = True
 
         self.root = tk.Tk()
         self.root.title("Drawing Application")
@@ -34,8 +38,8 @@ class CanvasGUI:
         self.canvas = tk.Canvas(self.root, width=800, height=600, bg="white")
         self.canvas.pack()
 
-        self.canvas.bind("<ButtonPress-1>", self.start_drawing)
-        self.canvas.bind("<B1-Motion>", self.draw)
+        self.canvas.bind("<ButtonPress-1>", self.mouse_pressed)
+        self.canvas.bind("<B1-Motion>", self.mouse_pressed_moved)
         self.canvas.bind("<ButtonRelease-1>", lambda _: threading.Thread(target=self.end_drawing).start())
         
         self.canvas.bind("<Motion>", self.move_target)
@@ -56,7 +60,21 @@ class CanvasGUI:
         # tk.Button(self.colors_frame, text="BLUE",font=font, command = lambda: self.set_color("BLUE")).grid(row = 0, column = 2)
         # tk.Button(self.colors_frame, text="RED",font=font, command = lambda: self.set_color("RED")).grid(row = 0, column = 3)
         # tk.Button(self.colors_frame, text="ORANGE",font=font, command = lambda: self.set_color("ORANGE")).grid(row = 0, column = 4)
+        
+        def set_mode(mode):
+            self.mode = mode
 
+            if mode == "rect" or mode == "oval":
+                self.show_target = False
+                self.canvas.config(cursor="tcross")
+            elif mode == "drawing":
+                self.show_target = True
+                self.canvas.config(cursor="none")
+                
+
+        tk.Button(self.colors_frame, text="DRAWING",font=font, command = lambda: set_mode("drawing")).grid(row = 0, column = 8)
+        tk.Button(self.colors_frame, text="RECTANGLE",font=font, command = lambda: set_mode("rect")).grid(row = 0, column = 9)
+        tk.Button(self.colors_frame, text="OVAL",font=font, command = lambda: set_mode("oval")).grid(row = 0, column = 10)
 
         vcmd = (self.root.register(self.width_entry_validation), "%P") #used to deal with validation in Tcl
         self.line_width_entry = tk.Entry(self.colors_frame, validate="all", validatecommand=vcmd, width=4, justify="center") # %P -> new value of entry box
@@ -114,10 +132,10 @@ class CanvasGUI:
         circle_off = width/2 - 1
         x1, y1 = (event.x - circle_off), (event.y - circle_off)
         x2, y2 = (event.x + circle_off), (event.y + circle_off)
-        id = self.canvas.create_oval(x1, y1, x2, y2, fill=self.color, outline="")
+        id_ = self.canvas.create_oval(x1, y1, x2, y2, fill=self.color, outline="")
         
         self.cur_drawing.add_point((event.x, event.y))
-        self.cur_drawing.add_id(id)
+        self.cur_drawing.add_id(id_)
 
 
     def draw(self, event):
@@ -130,16 +148,16 @@ class CanvasGUI:
         width = int(self.line_width_entry.get())
 
         x, y = event.x, event.y
-        id = self.canvas.create_line(self.prev_x, self.prev_y, x, y, fill=self.color, width=width)
-        self.cur_drawing.add_id(id)
+        id_ = self.canvas.create_line(self.prev_x, self.prev_y, x, y, fill=self.color, width=width)
+        self.cur_drawing.add_id(id_)
         self.prev_x, self.prev_y = x, y
         
         if (width > 3): # otherwise it looks weird
             circle_off = width/2 - 1 #offset, got to be slightly lower than width/2 so it wont buldge out
             x1, y1 = (event.x - circle_off), (event.y - circle_off)
             x2, y2 = (event.x + circle_off), (event.y + circle_off)
-            id = self.canvas.create_oval(x1, y1, x2, y2, fill=self.color, outline="")
-            self.cur_drawing.add_id(id)
+            id_ = self.canvas.create_oval(x1, y1, x2, y2, fill=self.color, outline="")
+            self.cur_drawing.add_id(id_)
 
         self.cur_drawing.add_point((x,y))
 
@@ -151,7 +169,7 @@ class CanvasGUI:
         self.cur_drawing.id = cur_id
 
         self.drawings.append(self.cur_drawing)
-        self.send_new_drawing(self.cur_drawing)        
+        self.send_to_db(self.cur_drawing)        
 
     def hide_target(self, *_): #*_ to deal with event
         '''
@@ -164,6 +182,9 @@ class CanvasGUI:
         '''
             Updates the position of the target shape to follow the mouse cursor.
         '''
+        if(not self.show_target):
+           return
+
         if(self.target != -1):
             self.canvas.delete(self.target)
         circle_off = max(5/2, int(self.line_width_entry.get())/2)
@@ -201,9 +222,9 @@ class CanvasGUI:
         if self.deleted_drawings:
             d = self.deleted_drawings.pop()
             self.drawings.append(d)
-            d.draw_drawing(self.canvas)
+            d.draw(self.canvas)
 
-            self.send_new_drawing(d)
+            self.send_to_db(d)
 
             # self.save_row(d)
 
@@ -222,7 +243,7 @@ class CanvasGUI:
 
         drawings = pickle.loads(data)
         for d in drawings:
-            d.draw_drawing(self.canvas)
+            d.draw(self.canvas)
             self.drawings.append(d)
 
 
@@ -238,7 +259,7 @@ class CanvasGUI:
         while self.window_open:
             try:
                 # Set a timeout for the socket operation so it will know if the window is closed
-                client_socket.settimeout(0.5)  # 0.1 second
+                client_socket.settimeout(0.5)  # in seconds
                 
                 with self.receive_lock:
                     data = SocketHelper.recv_msg(client_socket)
@@ -247,6 +268,8 @@ class CanvasGUI:
                 print(f'action: {action}, content: {content}')
 
                 if action == "new_line":
+                    self.add_to_drawings(content)
+                elif action == "new_rect" or action == "new_oval":
                     self.add_to_drawings(content)
                 elif action == "delete":
                     self.delete_line(content) 
@@ -258,10 +281,15 @@ class CanvasGUI:
                 continue
 
 
-    def send_new_drawing(self, d): # d - Drawing object
+    def send_to_db(self, d): # d - Drawing/Rect/Oval object
         '''Sends a new drawing to the server.'''
         # Define the data to be sent
-        data = pickle.dumps(("new_line", d))
+        if isinstance(d, Drawing):
+            data = pickle.dumps(("new_line", d))
+        elif isinstance(d, Oval):
+            data = pickle.dumps(("new_oval", d))
+        elif isinstance(d, Rect):
+            data = pickle.dumps(("new_rect", d))
         print(d)
         SocketHelper.send_msg(self.client_socket, data)
         # self.client_socket.sendall("hello my name is jeff im trying to make this string longer but its kinda hard to write a lot so im just writing bullshit until it gets past the chunk size did it get past the chunk size already who knows lets check".encode())
@@ -270,7 +298,7 @@ class CanvasGUI:
     def add_to_drawings(self, drawing):
         '''Adds a new drawing to the list of drawings and draws it on the canvas.'''
         self.drawings.append(drawing)
-        self.root.after(0, lambda:drawing.draw_drawing(self.canvas))
+        self.root.after(0, lambda:drawing.draw(self.canvas))
 
 
     def delete_line(self, id_, is_this_user = False):
@@ -306,8 +334,33 @@ class CanvasGUI:
             self.color = chosen_color
             self.pick_color_b.config(background=chosen_color)
 
+    def start_rect(self, event):
+        width = int(self.line_width_entry.get())
+        self.cur_drawing = Rect(self.color, width, event.x, event.y)
+        self.cur_drawing.draw(self.canvas)
+    
+    def start_oval(self, event):
+        width = int(self.line_width_entry.get())
+        self.cur_drawing = Oval(self.color, width, event.x, event.y)
+        self.cur_drawing.draw(self.canvas)
 
+    def update_rect_oval(self, event):
+        self.cur_drawing.update(event.x, event.y)
+        self.cur_drawing.redraw(self.canvas)
 
+    def mouse_pressed(self, event):
+        if self.mode == "drawing":
+            self.start_drawing(event)
+        elif self.mode == "rect":
+            self.start_rect(event)
+        elif self.mode == "oval":
+            self.start_oval(event)
+    
+    def mouse_pressed_moved(self, event):
+        if self.mode == "drawing":
+            self.draw(event)
+        elif self.mode == "rect" or self.mode == "oval":
+            self.update_rect_oval(event)
 
 
 class SelectProjectGUI:

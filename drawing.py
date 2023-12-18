@@ -1,9 +1,9 @@
 class Drawing:
-    def __init__(self, color, width, pt_list=[], id=-1):
+    def __init__(self, color, width, pt_list=[], id_=-1):
         self.pt_list = pt_list.copy()
         self.id_list = []
         
-        self.id = id # id of the whole drawing in the sql db, not an id of a stroke on the canvas
+        self.id = id_ # id of the whole drawing in the sql db, not an id of a stroke on the canvas
         
         self.color = color
         self.width = width
@@ -35,7 +35,7 @@ class Drawing:
         
         self.id_list = []
 
-    def draw_drawing(self, canvas):
+    def draw(self, canvas):
         '''
         draws the entire drawing
         '''
