@@ -1,30 +1,18 @@
-import tkinter as tk
-# import subprocess
-# import os
-import io
-from PIL import Image
+from PIL import Image, ImageDraw
 
-class App(tk.Tk):
-    def __init__(self):
-        tk.Tk.__init__(self)
-        self.line_start = None
-        self.canvas = tk.Canvas(self, width=300, height=300, bg="white")
-        self.canvas.bind("<Button-1>", lambda e: self.draw(e.x, e.y))
-        self.button = tk.Button(self, text="save",
-                                command=self.save)
-        self.canvas.pack()
-        self.button.pack(pady=10)
+# Create a new image
+image = Image.new("RGB", (400, 400), (255, 255, 255))
 
-    def draw(self, x, y):
-        if self.line_start:
-            x_origin, y_origin = self.line_start
-            self.canvas.create_line(x_origin, y_origin, x, y)
-        self.line_start = x, y
+# Create an ImageDraw object
+draw = ImageDraw.Draw(image)
 
-    def save(self):
-        ps = self.canvas.postscript(colormode='color')
-        img = Image.open(io.BytesIO(ps.encode('utf-8')))
-        img.save('/tmp/test.jpg')
+# Draw a rectangle
+draw.rectangle((100, 100, 300, 300), fill=(0, 0, 255))
 
-app = App()
-app.mainloop()
+# Draw an ellipse
+draw.ellipse((150, 150, 250, 250), fill=(255, 0, 0))
+
+draw.line([(150, 200), (143, 254), (28, 300)], fill=(0, 255, 0), width=5)
+
+# Save the image to the computer
+image.save("image.png")

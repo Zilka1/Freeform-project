@@ -1,3 +1,5 @@
+from PIL import Image, ImageDraw
+
 class Drawing:
     def __init__(self, color, width, pt_list=[], id_=-1):
         self.pt_list = pt_list.copy()
@@ -20,7 +22,7 @@ class Drawing:
         self.id_list.append(id)
     
     def draw_oval(self, canvas, point):
-        """Draws an oval with in given point"""
+        """Draws an oval in a given point"""
         x, y = point
         circle_off = self.width/2 - 1 #offset, got to be slightly lower than width/2 so it wont buldge out
         c_x1, c_y1 = (x - circle_off), (y - circle_off)
@@ -53,3 +55,13 @@ class Drawing:
         if (self.width > 3): # otherwise it looks weird
             self.draw_oval(canvas, self.pt_list[0])
             self.draw_oval(canvas, self.pt_list[-1])
+    
+    def draw_PIL(self, draw: ImageDraw.Draw):
+        draw.line(self.pt_list, fill=self.color, width=self.width)
+        for pt in self.pt_list:
+            x, y = pt
+            circle_off = self.width/2 - 1 #offset, got to be slightly lower than width/2 so it wont buldge out
+            c_x1, c_y1 = (x - circle_off), (y - circle_off)
+            c_x2, c_y2 = (x + circle_off), (y + circle_off)
+            id = draw.ellipse((c_x1, c_y1, c_x2, c_y2), fill=self.color, outline=None)
+            self.id_list.append(id)

@@ -8,6 +8,7 @@ from tkinter import colorchooser
 import socket
 import threading
 import pickle
+from PIL import Image, ImageDraw
 # from pathlib import Path
 # import queue
 # import time
@@ -28,7 +29,8 @@ class CanvasGUI:
         self.deleted_drawings = []
 
         self.mode = "drawing"
-        self.color = "black"
+        self.color = "#000000"
+        self.color_changed = False
         self.target = -1 #setup for target
         self.show_target = True
 
@@ -81,7 +83,7 @@ class CanvasGUI:
         tk.Button(self.colors_frame, text="REDO",font=font, command = self.redo_last_deleted_drawing).grid(row = 0, column = 3) # ↷
 
 
-        tk.Button(self.colors_frame, text="SAVE IMG", font=font, command = lambda: self.canvas.postscript(file="file_name.ps", colormode='color')).grid(row = 0, column = 8)
+        tk.Button(self.colors_frame, text="SAVE IMG", font=font, command = self.save_img).grid(row = 0, column = 8)
 
 
         self.canvas.config(cursor="none")
@@ -314,8 +316,9 @@ class CanvasGUI:
     
     def pick_color(self):
         # The first time the color picker is opened, the color picker will start with #50dca4, otherwise it will default to the last picked color
-        if self.color == "black":
+        if not self.color_changed:
             color = colorchooser.askcolor(title="Select Color", initialcolor="#50dca4")
+            self.color_changed = True
         else:
             color = colorchooser.askcolor(title="Select Color", initialcolor=self.color)
 
@@ -351,6 +354,38 @@ class CanvasGUI:
             self.draw(event)
         elif self.mode == "rect" or self.mode == "oval":
             self.update_rect_oval(event)
+
+    def save_img(self):
+        # Create a new image
+        image = Image.new("RGB", (800, 600), (255, 255, 255))
+
+        # Create an ImageDraw object
+        draw = ImageDraw.Draw(image)
+        for drawing in self.drawings:
+            if isinstance(drawing, Oval):
+                x1 = min(drawing.x1, drawing.x2)
+                x2 = max(drawing.x1, drawing.x2)
+                y1 = min(drawing.y1, drawing.y2)
+                y2 = max(drawing.y1, drawing.y2)
+                draw.ellipse((x1, y1, x2, y2), width=drawing.width, outline=drawing.color)
+            elif isinstance(drawing, Rect):
+                x1 = min(drawing.x1, drawing.x2)
+                x2 = max(drawing.x1, drawing.x2)
+                y1 = min(drawing.y1, drawing.y2)
+                y2 = max(drawing.y1, drawing.y2)
+                draw.rectangle((x1, y1, x2, y2), width=drawing.width, outline=drawing.color)
+            elif isinstance(drawing, Drawing):
+                # draw.line(drawing.pt_list, fill=drawing.color, width=drawing.width)
+                drawing.draw_PIL(draw)
+
+        # Save the image to the computer
+        image.save("image.png")
+
+
+
+
+
+
 
 
 class SelectProjectGUI:
