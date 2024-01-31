@@ -95,4 +95,6 @@ def func():
 root = tk.Tk()
 btn = RoundedButton(text="This is a \n rounded button", radius=100, btnbackground="#0078ff", btnforeground="#ffffff", clicked=func)
 btn.pack(expand=True, fill="both")
+
+btn.bind("<Enter>", lambda _: btn.config(background="#ffffff"))
 root.mainloop()

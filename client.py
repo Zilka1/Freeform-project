@@ -33,7 +33,7 @@ class CanvasGUI:
         self.show_target = True
 
         self.root = tk.Tk()
-        self.root.title("Drawing Application")
+        self.root.title("Drawing Application - " + file_name)
 
         self.canvas = tk.Canvas(self.root, width=800, height=600, bg="white")
         self.canvas.pack()
@@ -56,11 +56,7 @@ class CanvasGUI:
         
         self.pick_color_b = tk.Button(self.colors_frame, text="", command=self.pick_color, background=self.color, padx = 8)
         self.pick_color_b.grid(row = 0, column = 0, padx = 5)
-        # tk.Button(self.colors_frame, text="BLACK",font=font, command = lambda: self.set_color("BLACK")).grid(row = 0, column = 1)
-        # tk.Button(self.colors_frame, text="BLUE",font=font, command = lambda: self.set_color("BLUE")).grid(row = 0, column = 2)
-        # tk.Button(self.colors_frame, text="RED",font=font, command = lambda: self.set_color("RED")).grid(row = 0, column = 3)
-        # tk.Button(self.colors_frame, text="ORANGE",font=font, command = lambda: self.set_color("ORANGE")).grid(row = 0, column = 4)
-        
+
         def set_mode(mode):
             self.mode = mode
 
@@ -72,26 +68,20 @@ class CanvasGUI:
                 self.canvas.config(cursor="none")
                 
 
-        tk.Button(self.colors_frame, text="DRAWING",font=font, command = lambda: set_mode("drawing")).grid(row = 0, column = 8)
-        tk.Button(self.colors_frame, text="RECTANGLE",font=font, command = lambda: set_mode("rect")).grid(row = 0, column = 9)
-        tk.Button(self.colors_frame, text="OVAL",font=font, command = lambda: set_mode("oval")).grid(row = 0, column = 10)
+        tk.Button(self.colors_frame, text="DRAWING",font=font, command = lambda: set_mode("drawing")).grid(row = 0, column = 4)
+        tk.Button(self.colors_frame, text="RECTANGLE",font=font, command = lambda: set_mode("rect")).grid(row = 0, column = 5)
+        tk.Button(self.colors_frame, text="OVAL",font=font, command = lambda: set_mode("oval")).grid(row = 0, column = 6)
 
         vcmd = (self.root.register(self.width_entry_validation), "%P") #used to deal with validation in Tcl
         self.line_width_entry = tk.Entry(self.colors_frame, validate="all", validatecommand=vcmd, width=4, justify="center") # %P -> new value of entry box
-        self.line_width_entry.grid(row=0,column=5)
+        self.line_width_entry.grid(row=0,column=1)
         self.line_width_entry.insert(0, "10") # Sets starting width
 
-        tk.Button(self.colors_frame, text="UNDO", font=font, command=self.delete_last_drawing).grid(row=0, column=6) # ↶
-        tk.Button(self.colors_frame, text="REDO",font=font, command = self.redo_last_deleted_drawing).grid(row = 0, column = 7) # ↷
+        tk.Button(self.colors_frame, text="UNDO", font=font, command=self.delete_last_drawing).grid(row=0, column=2) # ↶
+        tk.Button(self.colors_frame, text="REDO",font=font, command = self.redo_last_deleted_drawing).grid(row = 0, column = 3) # ↷
 
 
-        # test_entry = tk.Entry(self.root)
-        # self.canvas.create_window(200, 200, window=test_entry)
-
-
-        # test_label = tk.Label(self.root, font=font, text= "HELLO")
-        # self.root.wm_attributes('-transparentcolor', '#ab23ff')
-        # self.canvas.create_window(200, 200, window=test_label)
+        tk.Button(self.colors_frame, text="SAVE IMG", font=font, command = lambda: self.canvas.postscript(file="file_name.ps", colormode='color')).grid(row = 0, column = 8)
 
 
         self.canvas.config(cursor="none")
@@ -380,20 +370,20 @@ class SelectProjectGUI:
         tk.Button(text = "START NEW PROJECT", command = self.new_project).pack(pady=20)
 
         for file in self.db_files:
-            tk.Button(text = file.stem, command = lambda name=file: self.open_project(name)).pack()
+            tk.Button(text = file, command = lambda name=file: self.open_project(name)).pack()
 
         self.root.mainloop()
 
 
-    def open_project(self, path):
+    def open_project(self, name):
         self.root.destroy()
 
         # file = self.dir + file_name
-        SocketHelper.send_msg(self.client_socket, pickle.dumps(("set_project_name", path)))
-        SocketHelper.send_msg(self.command_client_socket, path.__str__().encode())
-        print(path.__str__())
+        SocketHelper.send_msg(self.client_socket, pickle.dumps(("set_project_name", name)))
+        SocketHelper.send_msg(self.command_client_socket, name.encode())
+        print(name)
 
-        CanvasGUI(self.client_socket, self.command_client_socket, path, True)
+        CanvasGUI(self.client_socket, self.command_client_socket, name, True)
 
     def new_project(self):
         self.root.destroy()
@@ -437,11 +427,11 @@ class NewProjectGUI:
 
     def button_pressed(self):
         '''Opens an existing project by setting the project name and creating a new Canvas_GUI.'''
-        name = self.entry.get() + ".db"
-        if(name not in self.db_files):
+        name = self.entry.get()
+        if name not in self.db_files:
             self.root.destroy()
             SocketHelper.send_msg(self.client_socket, pickle.dumps(("set_project_name", name)))
-            SocketHelper.send_msg(self.command_client_socket, name.__str__().encode())
+            SocketHelper.send_msg(self.command_client_socket, name.encode())
             CanvasGUI(self.client_socket, self.command_client_socket, name, False)
         else:
             tk.Label(text="NAME ALREADY TAKEN, PLEASE TRY AGAIN").pack()

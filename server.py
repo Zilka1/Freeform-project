@@ -32,7 +32,7 @@ class Client:
     def set_project(self, project_name):
         '''Assigns a project to the client'''
         self.project = project_name
-        self.path = self.dir.joinpath(self.project)
+        self.path = self.dir.joinpath(self.project).with_suffix('.db')
 
 # Example usage:
 # client = Client(socket, address)
@@ -146,6 +146,7 @@ class MainServer:
 
         # Send to other clients
         for c in self.client_list:
+            print(c.project)
             if (c != client and c.project == client.project):
                 SocketHelper.send_msg(c.socket, pickle.dumps(("new_line", d)))
 
@@ -180,8 +181,8 @@ class MainServer:
         c = conn.cursor()
 
         c.execute('CREATE TABLE drawings (id INTERGER PRIMARY KEY, color TEXT, width INTEGER, pt_list TEXT)')
-        c.execute('CREATE TABLE rects (id INTERGER PRIMARY KEY, color TEXT, width INTEGER, x1 INTEGER, y1 INTEGErr, x2 INTEGER, y2 INTEGER)')
-        c.execute('CREATE TABLE ovals (id INTERGER PRIMARY KEY, color TEXT, width INTEGER, x1 INTEGER, y1 INTEGErr, x2 INTEGER, y2 INTEGER)')
+        c.execute('CREATE TABLE rects (id INTERGER PRIMARY KEY, color TEXT, width INTEGER, x1 INTEGER, y1 INTEGER, x2 INTEGER, y2 INTEGER)')
+        c.execute('CREATE TABLE ovals (id INTERGER PRIMARY KEY, color TEXT, width INTEGER, x1 INTEGER, y1 INTEGER, x2 INTEGER, y2 INTEGER)')
         c.execute('CREATE TABLE variables (name TEXT, value INTEGER)')
         c.execute('INSERT INTO variables VALUES (?, ?)', ("id", 0))
 
@@ -190,6 +191,7 @@ class MainServer:
     
     def load_canvas_sql(self, client):
         """Gets the current ID from the database, sends it to the client, and increments the ID."""
+        print(f"path:{client.path}, project:{client.project}")
         conn = sqlite3.connect(client.path)
         c = conn.cursor()
 
@@ -247,7 +249,8 @@ class MainServer:
         
         files = Path.iterdir(client.dir)
         # db_files = list(filter(self.is_db_file, files))
-        db_files = [file for file in files if file.suffix == ".db"] # Filter the db files
+        db_files = [file.stem for file in files if file.suffix == ".db"] # Filter the db files
+        print(db_files)
 
         SocketHelper.send_msg(client.socket, pickle.dumps(db_files))
 
@@ -315,7 +318,7 @@ class CommandServer():
         
         dir = Path(r'C:\Users\hp\Desktop\Freeform project\projects (db)')
         project_name = data.decode()
-        project_path = dir.joinpath(project_name)
+        project_path = dir.joinpath(project_name).with_suffix('.db')
 
         print("COMMAND SERVER:", project_path)
         while True:

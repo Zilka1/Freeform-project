@@ -23,8 +23,8 @@ class Rect():
 
 
 class Oval(Rect):
-    def __init__(self, color, width, x1, y1, x2=None, y2=None, id_=-1):
-        super().__init__(color, width, x1, y1, x2, y2, id_)
+    # def __init__(self, color, width, x1, y1, x2=None, y2=None, id_=-1):
+    #     super().__init__(color, width, x1, y1, x2, y2, id_)
 
     def draw(self, canvas: tk.Canvas):
         self.id_in_canvas = canvas.create_oval(self.x1, self.y1, self.x2, self.y2, width=self.width, outline=self.color)
