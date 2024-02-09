@@ -1,18 +1,20 @@
-from PIL import Image, ImageDraw
+import tkinter as tk
+from tkinter import filedialog
 
-# Create a new image
-image = Image.new("RGB", (400, 400), (255, 255, 255))
+# Create the Tkinter window
+root = tk.Tk()
 
-# Create an ImageDraw object
-draw = ImageDraw.Draw(image)
+# Define the function to select the directory and file name
+def select_directory_and_file():
+    # Open the file dialog
+    file_path = filedialog.asksaveasfilename(initialdir="/", title="Select a file", filetypes=(("PNG", "*.png"),), defaultextension=".png", initialfile="project name.png")
 
-# Draw a rectangle
-draw.rectangle((100, 100, 300, 300), fill=(0, 0, 255))
+    # Print the selected file path
+    print(file_path)
 
-# Draw an ellipse
-draw.ellipse((150, 150, 250, 250), fill=(255, 0, 0))
+# Create a button to trigger the function
+button = tk.Button(root, text="Select Directory and File Name", command=select_directory_and_file)
+button.pack()
 
-draw.line([(150, 200), (143, 254), (28, 300)], fill=(0, 255, 0), width=5)
-
-# Save the image to the computer
-image.save("image.png")
+# Run the main loop
+root.mainloop()

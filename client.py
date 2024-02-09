@@ -13,7 +13,7 @@ from PIL import Image, ImageDraw
 # import queue
 # import time
 # import struct
-
+from tkinter import filedialog
 
 
 class CanvasGUI:
@@ -21,6 +21,8 @@ class CanvasGUI:
         # self.dir = r'C:\Users\hp\Desktop\Freeform project\projects (db)\\'
         # self.file_name = file_name
         # self.full_path = self.dir + self.file_name
+
+        self.project_name = file_name
 
         self.client_socket = client_socket
         self.command_client_socket = command_client_socket
@@ -356,6 +358,12 @@ class CanvasGUI:
             self.update_rect_oval(event)
 
     def save_img(self):
+        # Select file location and name
+        file_path = filedialog.asksaveasfilename(initialdir="/", title="Select a file", filetypes=(("PNG", "*.png"),), defaultextension=".png", initialfile=self.project_name+".png")
+        if file_path == "":
+            return
+
+
         # Create a new image
         image = Image.new("RGB", (800, 600), (255, 255, 255))
 
@@ -379,7 +387,7 @@ class CanvasGUI:
                 drawing.draw_PIL(draw)
 
         # Save the image to the computer
-        image.save("image.png")
+        image.save(file_path)
 
 
 
