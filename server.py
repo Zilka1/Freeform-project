@@ -12,14 +12,19 @@ import pickle
 import sqlite3
 # import os
 # import time
+from cipher import Cipher
+from constants import NONCE
 
 class Client:
-    def __init__(self, socket, address, project=None): #needs project parameter
+    def __init__(self, socket, address, shared_key, project=None):
         self.dir = Path(r'C:\Users\hp\Desktop\Freeform project\projects (db)')
         
         self.socket = socket
         self.address = address
+        self.shared_key = shared_key
         self.project = project
+        
+        self.cipher = Cipher(self.shared_key, NONCE)
 
     def print_connection(self):
         """Prints the client connection details."""
@@ -33,6 +38,13 @@ class Client:
         '''Assigns a project to the client'''
         self.project = project_name
         self.path = self.dir.joinpath(self.project).with_suffix('.db')
+    
+    def encrypt(self, msg):
+        return self.cipher.aes_encrypt(msg)
+
+    def decrypt(self, msg):
+        return self.cipher.aes_decrypt(msg)
+        
 
 # Example usage:
 # client = Client(socket, address)
@@ -61,20 +73,24 @@ class MainServer:
             # Accept a client connection
             client_socket, client_address = server_socket.accept()
 
-            new_client = Client(client_socket, client_address)
+
+            #generate shared key
+            dh, pk = Cipher.get_dh_public_key()
+            client_pk = client_socket.recv(1024)
+            shared_key = Cipher.get_dh_shared_key(dh, client_pk)
+            print("shared key:", shared_key)
+            client_socket.send(pk)
+
+            new_client = Client(client_socket, client_address, shared_key)
             self.client_list.append(new_client)
             new_client.print_connection()
-
-            # for c in self.client_list:
-            #     print(c.address)
-            
 
             # Create a new thread to handle the client
             client_thread = threading.Thread(target=self.handle_client, args=(new_client,))
             client_thread.start()
     
     
-    def handle_client(self, client):
+    def handle_client(self, client: Client):
         '''Handles a single client connection.'''
         while True:
             # try:
@@ -95,11 +111,11 @@ class MainServer:
             elif action == "get_projects_names":
                 self.get_projects_names(client)
             elif action == "new_line":
-                self.new_line(client, content)
+                self.new_line(client, pickle.loads(client.decrypt(content)))
             elif action == "new_rect":
-                self.new_rect_oval(client, content, 'rect')
+                self.new_rect_oval(client, pickle.loads(client.decrypt(content)), 'rect')
             elif action == "new_oval":
-                self.new_rect_oval(client, content, 'oval')
+                self.new_rect_oval(client, pickle.loads(client.decrypt(content)), 'oval')
             elif action == "delete":
                 self.delete_line(client, content) #client, id
             # elif action == "get_and_inc_id":
@@ -189,7 +205,7 @@ class MainServer:
         conn.commit()
         conn.close()
     
-    def load_canvas_sql(self, client):
+    def load_canvas_sql(self, client: Client):
         """Gets the current ID from the database, sends it to the client, and increments the ID."""
         print(f"path:{client.path}, project:{client.project}")
         conn = sqlite3.connect(client.path)
@@ -237,7 +253,7 @@ class MainServer:
             drawings.append(r)
 
         drawings.sort(key = lambda d: d.id)
-        SocketHelper.send_msg(client.socket, pickle.dumps(drawings))
+        SocketHelper.send_msg(client.socket, client.encrypt(pickle.dumps(drawings)))
 
         conn.close()
 
@@ -254,7 +270,7 @@ class MainServer:
 
         SocketHelper.send_msg(client.socket, pickle.dumps(db_files))
 
-    def new_rect_oval(self, client, obj: Rect or Oval, type_):
+    def new_rect_oval(self, client, obj: Rect|Oval, type_):
         """Updates the database with a new drawing and sends it to other clients."""
         # Update DB
         conn = sqlite3.connect(client.path)

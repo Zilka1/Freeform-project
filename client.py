@@ -14,14 +14,17 @@ from PIL import Image, ImageDraw
 # import time
 # import struct
 from tkinter import filedialog
-
+from cipher import Cipher
+from constants import NONCE
 
 class CanvasGUI:
-    def __init__(self, client_socket, command_client_socket, file_name, exists = False):
+    def __init__(self, client_socket, command_client_socket, file_name, shared_key, exists = False):
         # self.dir = r'C:\Users\hp\Desktop\Freeform project\projects (db)\\'
         # self.file_name = file_name
         # self.full_path = self.dir + self.file_name
 
+        self.cipher = Cipher(shared_key, NONCE)
+        
         self.project_name = file_name
 
         self.client_socket = client_socket
@@ -233,7 +236,7 @@ class CanvasGUI:
         SocketHelper.send_msg(self.client_socket, pickle.dumps(("load_canvas", None)))
         
         with self.receive_lock:
-            data = SocketHelper.recv_msg(self.client_socket)
+            data = self.cipher.aes_decrypt(SocketHelper.recv_msg(self.client_socket))
 
         drawings = pickle.loads(data)
         for d in drawings:
@@ -278,15 +281,17 @@ class CanvasGUI:
     def send_to_db(self, d): # d - Drawing/Rect/Oval object
         '''Sends a new drawing to the server.'''
         # Define the data to be sent
+        mode = ""
         if isinstance(d, Drawing):
-            data = pickle.dumps(("new_line", d))
+            mode = "new_line"
         elif isinstance(d, Oval):
-            data = pickle.dumps(("new_oval", d))
+            mode = "new_oval"
         elif isinstance(d, Rect):
-            data = pickle.dumps(("new_rect", d))
-        print(d)
+            mode = "new_rect"
+        # print(data)
+
+        data = pickle.dumps((mode, self.cipher.aes_encrypt(pickle.dumps(d))))
         SocketHelper.send_msg(self.client_socket, data)
-        # self.client_socket.sendall("hello my name is jeff im trying to make this string longer but its kinda hard to write a lot so im just writing bullshit until it gets past the chunk size did it get past the chunk size already who knows lets check".encode())
 
 
     def add_to_drawings(self, drawing):
@@ -426,12 +431,12 @@ class SelectProjectGUI:
         SocketHelper.send_msg(self.command_client_socket, name.encode())
         print(name)
 
-        CanvasGUI(self.client_socket, self.command_client_socket, name, True)
+        CanvasGUI(self.client_socket, self.command_client_socket, name, self.shared_key, exists=True)
 
     def new_project(self):
         self.root.destroy()
         
-        NewProjectGUI(self.client_socket, self.command_client_socket, self.db_files)
+        NewProjectGUI(self.client_socket, self.command_client_socket, self.db_files, self.shared_key)
     
     def init_connection_to_server(self):
         hostname = 'localhost'
@@ -444,6 +449,14 @@ class SelectProjectGUI:
         command_server_address = (hostname, 1730)
         self.command_client_socket.connect(command_server_address)
 
+        #generate shared key
+        dh, pk = Cipher.get_dh_public_key()
+        self.client_socket.send(pk)
+        reply = self.client_socket.recv(1024)
+        self.shared_key = Cipher.get_dh_shared_key(dh, reply)
+
+        print("shared key:", self.shared_key)
+
         print(f'Connected to server {server_address[0]}:{server_address[1]}')
 
     
@@ -453,10 +466,11 @@ class SelectProjectGUI:
 
 
 class NewProjectGUI:
-    def __init__(self, client_socket, command_client_socket, db_files):
+    def __init__(self, client_socket, command_client_socket, db_files, shared_key):
         self.client_socket = client_socket
         self.command_client_socket = command_client_socket
         self.db_files = db_files
+        self.shared_key = shared_key
 
         # self.dir = r'C:\Users\hp\Desktop\Freeform project\projects (db)\\'
         self.root = tk.Tk()
@@ -475,7 +489,7 @@ class NewProjectGUI:
             self.root.destroy()
             SocketHelper.send_msg(self.client_socket, pickle.dumps(("set_project_name", name)))
             SocketHelper.send_msg(self.command_client_socket, name.encode())
-            CanvasGUI(self.client_socket, self.command_client_socket, name, False)
+            CanvasGUI(self.client_socket, self.command_client_socket, name, self.shared_key, False)
         else:
             tk.Label(text="NAME ALREADY TAKEN, PLEASE TRY AGAIN").pack()
 
