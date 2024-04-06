@@ -1,6 +1,7 @@
 # Notes on some problems:
 # client checks if new project name is valid based on the list it got before
 # client receiving from server with threading lock can be problematic
+# hackable by sending the project name directly
 
 from drawing import Drawing
 from rect_oval import Rect, Oval
@@ -108,6 +109,8 @@ class MainServer:
 
             if action == "set_project_name":
                 client.set_project(content)
+            elif action == "open_project":
+                self.open_project(client, *content)
             elif action == "get_projects_names":
                 self.get_projects_names(client)
             elif action == "new_line":
@@ -121,7 +124,7 @@ class MainServer:
             # elif action == "get_and_inc_id":
             #     self.get_and_inc_id(client)
             elif action == "create_new_db":
-                self.create_new_db(client)
+                self.create_new_db(client, content)
             elif action == "load_canvas":
                 self.load_canvas_sql(client)
 
@@ -149,6 +152,19 @@ class MainServer:
         # for c in self.client_list:
         #     print(c.address)
 
+    def open_project(self, client, name, hashed_pwd):
+        dir = Path(r'C:\Users\hp\Desktop\Freeform project\projects (db)')
+        project_path = self.dir.joinpath(self.project).with_suffix('.db')
+
+        conn = sqlite3.connect(project_path)
+        c = conn.cursor()
+
+        c.execute('SELECT hashed_pwd FROM variables WHERE name = "id"')
+
+        pwd = c.fetchone()[0]
+
+        if hashed_pwd == pwd:
+            client.
 
     def new_line(self, client, d): # d - Drawing object
         """Updates the database with a new drawing and sends it to other clients."""
@@ -191,7 +207,7 @@ class MainServer:
 
 
 
-    def create_new_db(self, client):
+    def create_new_db(self, client, hashed_pwd):
         '''Initializes a new database'''
         conn = sqlite3.connect(client.path)
         c = conn.cursor()
@@ -201,6 +217,7 @@ class MainServer:
         c.execute('CREATE TABLE ovals (id INTERGER PRIMARY KEY, color TEXT, width INTEGER, x1 INTEGER, y1 INTEGER, x2 INTEGER, y2 INTEGER)')
         c.execute('CREATE TABLE variables (name TEXT, value INTEGER)')
         c.execute('INSERT INTO variables VALUES (?, ?)', ("id", 0))
+        c.execute('INSERT INTO variables VALUES (?, ?)', ("hashed_pwd", hashed_pwd))
 
         conn.commit()
         conn.close()

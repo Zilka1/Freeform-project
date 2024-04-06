@@ -16,9 +16,10 @@ from PIL import Image, ImageDraw
 from tkinter import filedialog
 from cipher import Cipher
 from constants import NONCE
+from hashlib import sha256
 
 class CanvasGUI:
-    def __init__(self, client_socket, command_client_socket, file_name, shared_key, exists = False):
+    def __init__(self, client_socket, command_client_socket, file_name, shared_key, pwd = None, exists = False):
         # self.dir = r'C:\Users\hp\Desktop\Freeform project\projects (db)\\'
         # self.file_name = file_name
         # self.full_path = self.dir + self.file_name
@@ -100,7 +101,7 @@ class CanvasGUI:
         if(exists):
             self.load_canvas()
         else:
-            self.create_new_db()
+            self.create_new_db(pwd)
 
         receive_thread = threading.Thread(target=self.receive_data, args=(self.client_socket,))
         receive_thread.start()
@@ -244,11 +245,11 @@ class CanvasGUI:
             self.drawings.append(d)
 
 
-    def create_new_db(self):
+    def create_new_db(self, pwd):
         '''
             Creates a new database for the canvas.
         '''
-        SocketHelper.send_msg(self.client_socket, pickle.dumps(("create_new_db", None)))
+        SocketHelper.send_msg(self.client_socket, pickle.dumps(("create_new_db", sha256(pwd.encode()).hexdigest())))
 
 
     def receive_data(self, client_socket):
@@ -425,7 +426,7 @@ class SelectProjectGUI:
 
     def open_project(self, name):
         self.root.destroy()
-
+        
         # file = self.dir + file_name
         SocketHelper.send_msg(self.client_socket, pickle.dumps(("set_project_name", name)))
         SocketHelper.send_msg(self.command_client_socket, name.encode())
@@ -477,19 +478,22 @@ class NewProjectGUI:
         self.root.geometry("400x400")
         self.root.title("Start new project")
         tk.Label(self.root, text="PICK A NAME FOR YOUR PROJECT")
-        self.entry = tk.Entry(self.root)
-        self.entry.pack()
+        self.name_entry = tk.Entry(self.root)
+        self.name_entry.pack()
+        self.pwd_entry = tk.Entry(self.root)
+        self.pwd_entry.pack()
         tk.Button(text="CREATE", command=self.button_pressed).pack()
 
 
     def button_pressed(self):
         '''Opens an existing project by setting the project name and creating a new Canvas_GUI.'''
-        name = self.entry.get()
+        name = self.name_entry.get()
+        pwd = self.pwd_entry.get()
         if name not in self.db_files:
             self.root.destroy()
             SocketHelper.send_msg(self.client_socket, pickle.dumps(("set_project_name", name)))
             SocketHelper.send_msg(self.command_client_socket, name.encode())
-            CanvasGUI(self.client_socket, self.command_client_socket, name, self.shared_key, False)
+            CanvasGUI(self.client_socket, self.command_client_socket, name, self.shared_key, pwd, False)
         else:
             tk.Label(text="NAME ALREADY TAKEN, PLEASE TRY AGAIN").pack()
 
