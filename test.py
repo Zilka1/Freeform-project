@@ -1,20 +1,13 @@
-import tkinter as tk
-from tkinter import filedialog
+import bcrypt
 
-# Create the Tkinter window
-root = tk.Tk()
+# Generate a random salt
+salt = bcrypt.gensalt()
 
-# Define the function to select the directory and file name
-def select_directory_and_file():
-    # Open the file dialog
-    file_path = filedialog.asksaveasfilename(initialdir="/", title="Select a file", filetypes=(("PNG", "*.png"),), defaultextension=".png", initialfile="project name.png")
+# Hash a password using the salt
+hashed_password = bcrypt.hashpw(b"my_password", salt)
 
-    # Print the selected file path
-    print(file_path)
-
-# Create a button to trigger the function
-button = tk.Button(root, text="Select Directory and File Name", command=select_directory_and_file)
-button.pack()
-
-# Run the main loop
-root.mainloop()
+# Verify a password by comparing the hashed password with the stored salt
+if bcrypt.checkpw(b"my_password", hashed_password):
+    print("Password is correct.")
+else:
+    print("Password is incorrect.")
