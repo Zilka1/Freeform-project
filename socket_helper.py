@@ -1,6 +1,7 @@
 import struct
 import pickle
 
+
 class SocketHelper:
     def send_msg(socket, msg):
         # Prefix each message with a 4-byte length (network byte order)
