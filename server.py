@@ -15,10 +15,10 @@ import sqlite3
 from cipher import Cipher
 from constants import NONCE
 
-
+dir = Path(r'C:\Users\hp\Desktop\Freeform project\projects (db)')
 class Client:
     def __init__(self, socket, address, shared_key, project=None):
-        self.dir = Path(r'C:\Users\hp\Desktop\Freeform project\projects (db)')
+        self.dir = dir
 
         self.socket = socket
         self.address = address
@@ -308,15 +308,6 @@ class CommandServer():
             print(
                 f'Client connected to command server: {client_address[0]}:{client_address[1]}')
 
-            # project_path = client_socket.recv(1024).decode()
-
-            # dir = Path(r'C:\Users\hp\Desktop\Freeform project\projects (db)')
-
-            # project_path = dir.joinpath(project_name)
-
-            # print("set project:", project_path)
-
-            # Create a new thread to handle the client
             client_thread = threading.Thread(
                 target=self.handle_client, args=(client_socket,))
             client_thread.start()
@@ -327,19 +318,16 @@ class CommandServer():
         if data is None:
             client_socket.close()
             return
-
-        dir = Path(r'C:\Users\hp\Desktop\Freeform project\projects (db)')
+        
         project_name = data.decode()
         project_path = dir.joinpath(project_name).with_suffix('.db')
 
-        print("COMMAND SERVER:", project_path)
         while True:
             data = SocketHelper.recv_msg(client_socket)
             if data is None:
                 break
 
             action, content = pickle.loads(data)
-            print(f"COMMAND SERVER: action: {action}, content: {content}")
 
             if action == "get_and_inc_id":
                 self.get_and_inc_id(client_socket, project_path)
