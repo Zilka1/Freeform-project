@@ -106,8 +106,10 @@ class MainServer:
             print(
                 f'Client {client.address[0]}:{client.address[1]}: action: {action}, content: {content}')
 
-            if action == "set_project_name":
+            if action == "set_project_name": # for new projects
                 client.set_project(content)
+            elif action == "name_and_pwd": # for logging in to already existing projects
+                self.name_and_pwd(client, content)
             elif action == "get_projects_names":
                 self.get_projects_names(client)
             elif action == "new_line":
@@ -123,7 +125,7 @@ class MainServer:
             # elif action == "get_and_inc_id":
             #     self.get_and_inc_id(client)
             elif action == "create_new_db":
-                self.create_new_db(client)
+                self.create_new_db(client, content)
             elif action == "load_canvas":
                 self.load_canvas_sql(client)
 
@@ -149,6 +151,32 @@ class MainServer:
         # print("clients:")
         # for c in self.client_list:
         #     print(c.address)
+    
+    def name_and_pwd(self, client, content):
+        name, pwd = content
+
+        path = client.dir.joinpath(name).with_suffix('.db')
+
+        conn = sqlite3.connect(path)
+        c = conn.cursor()
+        c.execute('SELECT value FROM str_variables WHERE name = "pwd"')
+
+        correct_pwd = c.fetchone()[0]
+
+        conn.commit()
+        conn.close()
+
+        print(pwd==correct_pwd)
+
+        if (pwd == correct_pwd):
+            SocketHelper.send_msg(client.socket, "success".encode())
+            client.set_project(name)
+        else:
+            SocketHelper.send_msg(client.socket, "incorrect".encode())
+
+
+
+
 
     def new_line(self, client, d):  # d - Drawing object
         """Updates the database with a new drawing and sends it to other clients."""
@@ -185,7 +213,7 @@ class MainServer:
             if (c != client and c.project == client.project):
                 SocketHelper.send_msg(c.socket, pickle.dumps(("delete", id_)))
 
-    def create_new_db(self, client):
+    def create_new_db(self, client, password):
         '''Initializes a new database'''
         conn = sqlite3.connect(client.path)
         c = conn.cursor()
@@ -196,6 +224,10 @@ class MainServer:
         c.execute('CREATE TABLE ovals (id INTERGER PRIMARY KEY, color TEXT, width INTEGER, x1 INTEGER, y1 INTEGER, x2 INTEGER, y2 INTEGER)')
         c.execute('CREATE TABLE int_variables (name TEXT, value INTEGER)')
         c.execute('INSERT INTO int_variables VALUES (?, ?)', ("id", 0))
+        c.execute('CREATE TABLE str_variables (name TEXT, value INTEGER)')
+        c.execute('INSERT INTO str_variables VALUES (?, ?)', ("pwd", password))
+        print("password:", password)
+        print(type(password))
 
         conn.commit()
         conn.close()

@@ -438,13 +438,17 @@ class SelectProjectGUI:
         self.root.destroy()
 
         # file = self.dir + file_name
-        SocketHelper.send_msg(self.client_socket,
-                              pickle.dumps(("set_project_name", name)))
-        SocketHelper.send_msg(self.command_client_socket, name.encode())
+        # SocketHelper.send_msg(self.client_socket,
+        #                       pickle.dumps(("set_project_name", name)))
+        # SocketHelper.send_msg(self.command_client_socket, name.encode())
         print(name)
 
-        CanvasGUI(self.client_socket, self.command_client_socket,
-                  name, self.shared_key, exists=True)
+        # CanvasGUI(self.client_socket, self.command_client_socket,
+        #           name, self.shared_key, exists=True)
+
+        EnterPasswordGUI(name, self.client_socket, self.command_client_socket, self.shared_key)
+
+
 
     def new_project(self):
         self.root.destroy()
@@ -485,12 +489,14 @@ class NewProjectGUI:
         self.root = tk.Tk()
         self.root.geometry("400x400")
         self.root.title("Start new project")
-        tk.Label(self.root, text="PICK A NAME FOR YOUR PROJECT")
+        # tk.Label(self.root, text="CREATE PROJECT").
+        tk.Label(self.root, text="NAME:", padx=3).grid(row=0, column=0)
         self.name_entry = tk.Entry(self.root)
-        self.name_entry.pack()
+        self.name_entry.grid(row=0, column=1)
+        tk.Label(self.root, text="PASSWORD:", padx=3).grid(row=1, column=0)
         self.pwd_entry = tk.Entry(self.root)
-        self.pwd_entry.pack()
-        tk.Button(text="CREATE", command=self.button_pressed).pack()
+        self.pwd_entry.grid(row=1, column=1)
+        tk.Button(text="CREATE", command=self.button_pressed).grid(row=2, column=1)
 
     def button_pressed(self):
         '''Opens an existing project by setting the project name and creating a new Canvas_GUI.'''
@@ -505,6 +511,39 @@ class NewProjectGUI:
                       name, self.shared_key, pwd, False)
         else:
             tk.Label(text="NAME ALREADY TAKEN, PLEASE TRY AGAIN").pack()
+
+class EnterPasswordGUI:
+    def __init__(self, name, client_socket, command_client_socket, shared_key):
+        self.name = name
+        self.client_socket = client_socket
+        self.command_client_socket = command_client_socket
+        self.shared_key = shared_key
+
+        self.root = tk.Tk()
+        self.root.geometry("400x400")
+        self.root.title("Enter Password")
+        tk.Label(self.root, text="ENTER PASSWORD:").pack()
+        
+        self.pwd_entry = tk.Entry(self.root, show="*")
+        self.pwd_entry.pack()
+        
+        tk.Button(self.root, text="ENTER", command=self.button_pressed).pack()
+
+        self.root.mainloop()
+
+    def button_pressed(self):
+        SocketHelper.send_msg(self.client_socket,
+        pickle.dumps(("name_and_pwd", (self.name, sha256(self.pwd_entry.get().encode()).hexdigest()))))
+        answer = SocketHelper.recv_msg(self.client_socket).decode()
+        if answer == "success":
+            self.root.destroy()
+            CanvasGUI(self.client_socket, self.command_client_socket,
+                   self.name, self.shared_key, exists=True)
+        else:
+            tk.Label(self.root, text="INCORRECT PASSWORD", fg="red").pack()
+
+        # SocketHelper.send_msg(self.command_client_socket, name.encode())
+
 
 
 # class Client:
