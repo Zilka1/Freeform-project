@@ -537,6 +537,7 @@ class EnterPasswordGUI:
         answer = SocketHelper.recv_msg(self.client_socket).decode()
         if answer == "success":
             self.root.destroy()
+            SocketHelper.send_msg(self.command_client_socket, self.name.encode())
             CanvasGUI(self.client_socket, self.command_client_socket,
                    self.name, self.shared_key, exists=True)
         else:
