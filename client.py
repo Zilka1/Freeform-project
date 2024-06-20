@@ -494,7 +494,7 @@ class NewProjectGUI:
         self.name_entry = tk.Entry(self.root)
         self.name_entry.grid(row=0, column=1)
         tk.Label(self.root, text="PASSWORD:", padx=3).grid(row=1, column=0)
-        self.pwd_entry = tk.Entry(self.root)
+        self.pwd_entry = tk.Entry(self.root, show="*")
         self.pwd_entry.grid(row=1, column=1)
         tk.Button(text="CREATE", command=self.button_pressed).grid(row=2, column=1)
 

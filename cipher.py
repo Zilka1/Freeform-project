@@ -1,4 +1,3 @@
-import random
 # pip install pycryptodome
 from Crypto.Cipher import AES
 # pip install py-diffie-hellman
