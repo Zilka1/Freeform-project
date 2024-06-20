@@ -1,6 +1,0 @@
-projects (db)
-.vscode/settings.json
-api_client.py
-api_server.py
-print table.py
-*.pyc
