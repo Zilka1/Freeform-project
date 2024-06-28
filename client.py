@@ -18,6 +18,7 @@ from cipher import Cipher
 from constants import NONCE
 from hashlib import sha256
 
+hostname = "localhost"
 
 class CanvasGUI:
     def __init__(self, client_socket, command_client_socket, file_name, shared_key, pwd=None, exists=False):
@@ -457,7 +458,7 @@ class SelectProjectGUI:
                       self.db_files, self.shared_key)
 
     def init_connection_to_server(self):
-        hostname = 'localhost'
+        global hostname
 
         self.client_socket = socket.socket()
         server_address = (hostname, 1729)
